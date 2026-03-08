@@ -1,0 +1,494 @@
+/* 
+    biblioshiny.css
+    Custom CSS for Biblioshiny (Bibliometrix-Python web interface)
+    ---------------------------------------------------------------
+    This stylesheet defines the visual appearance of the Biblioshiny web app.
+    It includes layout, color schemes, button styles, sidebar, header, dropdowns,
+    DataTables integration, and custom scrollbar styling.
+    Main color theme: #5567BB (blue-violet)
+    Font: 'Segoe UI', sans-serif
+    Author: PRAISE Lab Team
+    ---------------------------------------------------------------
+*/
+
+
+/* ===========================
+    Layout and Base Styles
+    =========================== */
+html, body {
+     height: 100%;
+     margin: 0;
+     font-family: 'Segoe UI', sans-serif;
+}
+
+/* ===========================
+    Header Bar
+    =========================== */
+.header-bar {
+     display: flex;
+     justify-content: space-between;
+     align-items: center;
+     background-color: #5567BB;
+     color: white;
+     padding: 10px 10px;
+     height: 60px;
+     position: fixed;
+     top: 0;
+     left: 0;
+     right: 0;
+     z-index: 1000;
+}
+
+.header-logo {
+     display: flex;
+     align-items: center;
+     font-weight: bold;
+     font-size: 18px;
+     padding-left: 40px
+}
+
+.header-logo img {
+     height: 40px;
+     margin-right: 10px;
+}
+
+.header-icons {
+     display: flex;
+     gap: 0px;
+     font-size: 20px;
+     cursor: pointer;
+}
+
+/* ===========================
+    Sidebar Styles
+    =========================== */
+.custom-sidebar {
+     background: #5567BB;
+     color: white;
+     padding: 0px;
+     width: 300px;
+     height: calc(100vh - 60px);
+     overflow: hidden;
+     margin-top: 60px;
+     position: fixed;
+     left: 0;
+     top: 0;
+     bottom: 0;
+     transition: transform 0.3s ease;
+     z-index: 999;
+     /* Allow scrolling but hide scrollbars */
+     overflow: auto;
+     scrollbar-width: none; /* Firefox */
+}
+.custom-sidebar::-webkit-scrollbar {
+     display: none; /* Chrome, Safari, Opera */
+}
+
+.accordion-title {
+     color: #5567BB;
+}
+
+.sidebar-hidden {
+     transform: translateX(-100%);
+}
+
+/* ===========================
+    Sidebar Toggle Button
+    =========================== */
+.sidebar-toggle {
+     position: fixed;
+     top: 10px;
+     left: 10px;
+     background-color: #5567BB;
+     color: white;
+     border: none;
+     padding: 8px 12px;
+     border-radius: 4px;
+     cursor: pointer;
+     z-index: 1001;
+     transition: background-color 0.3s ease;
+}
+
+.sidebar-toggle:hover {
+     background-color: #0a357f;
+}
+
+/* ===========================
+    Main Content Area
+    =========================== */
+.main-content {
+     margin-top: 80px;
+     margin-left: 300px;
+     padding: 20px;
+     background-color: white;
+     min-height: calc(100vh - 60px);
+     transition: margin-left 0.3s ease;
+     width: calc(100%-300px);
+}
+
+.main-content.full-width {
+     margin-left: 0px;
+}
+
+.main-content h1 {
+     color: #5567BB;
+     font-size: 2em;
+     font-weight: bold;
+}
+
+.main-content p {
+     font-size: 14px;
+}
+
+/* ===========================
+    Accordion Panel
+    =========================== */
+.accordion-panel {
+     background-color: #5567BB;
+     border-radius: 8px;
+     padding: 10px;
+     margin-bottom: 10px;
+     color: white;
+}
+
+/* ===========================
+    Sidebar Button
+    =========================== */
+.sidebar-button {
+     background: #5567BB;
+     border: 1px solid white;
+     color: white;
+     padding: 6px 12px;
+     margin-top: 5px;
+     width: 100%;
+     text-align: left;
+     cursor: pointer;
+     border-radius: 4px;
+     transition: background 0.2s;
+}
+
+.sidebar-button:hover {
+     background-color: #5567BB;
+}
+
+/* ===========================
+    Dropdown Menu
+    =========================== */
+.dropdown {
+     position: relative;
+     display: inline-block;
+}
+
+.dropbtn {
+     cursor: pointer;
+     padding: 8px 16px;
+     font-size: 18px;
+     background: #5567BB;
+     color: white;
+     border: none;
+     border-radius: 4px;
+     font-family: 'Segoe UI', sans-serif;
+     font-weight: 500;
+     transition: background 0.2s;
+}
+
+.dropbtn:hover, .dropbtn:focus {
+     background: #4050a0;
+     outline: none;
+}
+
+.dropdown-content {
+     display: none;
+     position: absolute;
+     right: 0;
+     background-color: white;
+     min-width: 220px;
+     box-shadow: 0px 2px 4px rgba(85, 103, 187, 0.18);
+     padding: 8px;
+     z-index: 1002;
+     border-radius: 0px;
+     color: #5567BB;
+     top: 100%; /* Position directly below the button */
+     border: 1px solid #fff;
+     animation: dropdownFadeIn 0.55s;
+     font-family: 'Segoe UI', sans-serif;
+     opacity: 0;
+     pointer-events: none;
+     transition: opacity 0.4s;
+}
+
+/* Create an invisible bridge between button and dropdown */
+.dropdown-content::before {
+     content: '';
+     position: absolute;
+     top: -10px; /* Extend upward to create bridge */
+     left: 0;
+     right: 0;
+     height: 10px;
+     background: transparent;
+     z-index: 1003;
+}
+
+.dropdown:hover .dropdown-content,
+.dropdown:focus-within .dropdown-content {
+     display: block;
+     opacity: 1;
+     pointer-events: auto;
+     transition: opacity 0.2s ease-in;
+}
+
+.dropdown:not(:hover):not(:focus-within) .dropdown-content {
+     opacity: 0;
+     pointer-events: none;
+     transition: opacity 0.6s ease-out 0.1s; /* Added delay */
+}
+
+@keyframes dropdownFadeOut {
+     from { opacity: 1; transform: translateY(0);}
+     to { opacity: 0; transform: translateY(-8px);}
+}
+
+@keyframes dropdownFadeIn {
+     from { opacity: 0; transform: translateY(-8px);}
+     to { opacity: 1; transform: translateY(0);}
+}
+
+.dropdown-content a {
+     display: block;
+     padding: 8px 14px;
+     text-decoration: none;
+     color: #5567BB;
+     font-size: 16px;
+     border-radius: 0px;
+     transition: background 0.18s, color 0.18s;
+     font-family: 'Segoe UI', sans-serif;
+}
+
+.dropdown-content a:hover, .dropdown-content a:focus {
+     background: #5567BB;
+     color: #fff;
+     text-decoration: none;
+     padding: 8px 14px;
+     border-radius: 6px;
+}
+
+/* ===========================
+    Default and Outline Buttons
+    =========================== */
+.btn-outline-default, .btn-default:not(.btn-primary,.btn-secondary,.btn-info,.btn-success,.btn-danger,.btn-warning,.btn-light,.btn-dark,.btn-link,[class*="btn-outline-"]) {
+     background-color: #5567BB;
+     color: white;
+     border: none;
+     padding: 8px 16px;
+     border-radius: 4px;
+     cursor: pointer;
+     font-family: 'Segoe UI', sans-serif;
+     font-weight: 500;
+     transition: background 0.2s, color 0.2s;
+}
+
+.btn-outline-default:hover, 
+.btn-default:not(.btn-primary,.btn-secondary,.btn-info,.btn-success,.btn-danger,.btn-warning,.btn-light,.btn-dark,.btn-link,[class*="btn-outline-"]):hover,
+.btn-outline-default:focus, 
+.btn-default:not(.btn-primary,.btn-secondary,.btn-info,.btn-success,.btn-danger,.btn-warning,.btn-light,.btn-dark,.btn-link,[class*="btn-outline-"]):focus {
+     background-color: #4050a0;
+     color: #fff;
+     outline: none;
+}
+
+/* ===========================
+    DataTables Export Buttons
+    =========================== */
+/* Style all export buttons in dt-buttons */
+div.dt-buttons .dt-button,
+div.dt-buttons .dt-button.buttons-csv,
+div.dt-buttons .dt-button.buttons-excel,
+div.dt-buttons .dt-button-collection .dt-button {
+     background-color: #5567BB !important;
+     color: white !important;
+     border: none !important;
+     margin-right: 4px;
+     cursor: pointer;
+     font-family: 'Segoe UI', sans-serif !important;
+     font-size: 14px !important;
+     height: 40px;
+     box-sizing: border-box;
+     display: inline-flex;
+     align-items: center;
+     justify-content: center;
+     transition: background-color 0.2s ease;
+     background-image: none !important;
+     border-radius: 6px !important;
+}
+
+/* Align dropdown arrows ▼ */
+div.dt-buttons .dt-button-collection .dt-button:after,
+div.dt-buttons .dt-button.buttons-collection:after {
+     vertical-align: middle;
+}
+
+/* Uniform hover effect */
+div.dt-buttons .dt-button:hover {
+     background-color: #3f519e !important;
+     color: #f1f1f1 !important;
+     background-image: none !important;
+     border-radius: 6px !important;
+}
+
+/* ===========================
+    DataTables Pagination Buttons
+    =========================== */
+/* All pagination buttons */
+div.dt-container .dt-paging .dt-paging-button {
+     color: white !important;
+     border: none !important;
+     padding: 10px 18px !important;
+     margin: 0 5px;
+     border-radius: 6px !important;
+     cursor: pointer;
+     font-family: 'Segoe UI', sans-serif !important;
+     font-size: 14px;
+     transition: background-color 0.2s ease;
+     background-image: none !important;
+}
+
+/* Current page button */
+div.dt-container div.dt-paging button.dt-paging-button.current,
+div.dt-container div.dt-paging button.dt-paging-button.current:hover {
+     background-color: #5567BB !important;
+     color: #fff !important;
+     font-weight: bold !important;
+     border: none !important;
+     box-shadow: none !important;
+     outline: none !important;
+     background-image: none !important;
+     border-radius: 6px !important;
+}
+
+/* Hover effect for pagination */
+div.dt-container div.dt-paging button.dt-paging-button:hover:not(.current):not(.disabled) {
+     background-color: #5567BB !important;
+     background: #5567BB !important;
+     background-image: none !important;
+     color: #f1f1f1 !important;
+     border: none !important;
+     box-shadow: none !important;
+     outline: none !important;
+     border-radius: 6px !important;
+}
+
+/* Disabled pagination (unclickable arrows) */
+div.dt-container .dt-paging .dt-paging-button.disabled {
+     background-color: #f9f9f9 !important;
+     color: #fff !important;
+     cursor: default;
+     background-image: none !important;
+     border-radius: 6px !important;
+}
+
+/* ===========================
+    DataTables Search and Select
+    =========================== */
+div.dt-container .dt-search input {
+     border: 1px solid #f2f2f2 !important;
+     border-radius: 6px !important; 
+     padding: 5px;
+     background-color: white !important;
+     color: inherit;
+     margin-left: 13px !important;
+}
+
+div.dt-container .dt-button-collection {
+     background-color: #5567BB !important;
+     color: white !important;
+     border: none !important;
+     border-radius: 1px !important;
+}
+
+div.dt-container select.dt-input {
+     padding: 4px;
+     margin-right: 13px !important;
+     border: 1px solid #f2f2f2 !important;
+     border-radius: 6px !important;
+     background-color: white !important;
+}
+
+/* ===========================
+    DataTables Table Styles
+    =========================== */
+/* Style for the entire DataTable */
+table.dataTable {
+     width: 100% !important;
+     border-collapse: collapse !important; /* Merge cell borders */
+     margin-top: 10px;
+     margin-bottom: 10px;
+     border-radius: 8px !important; /* Rounded table border */
+     overflow: hidden !important; /* Hide inner cell corners */
+}
+
+/* Table header style */
+table.dataTable thead th {
+     background-color: #5567BB !important; /* Blue/violet header */
+     color: white !important; /* White header text */
+     border-bottom: 2px solid #6777ef !important; /* Bottom border */
+     padding: 12px 15px !important;
+     text-align: left !important;
+     font-weight: bold !important; /* Bold header text */
+}
+
+/* Table body cell style */
+table.dataTable tbody td {
+     padding: 10px 15px !important;
+     border-bottom: 1px solid #f2f2f2 !important; /* Light row divider */
+}
+
+/* Remove bottom border from last row */
+table.dataTable tbody tr:last-child td {
+     border-bottom: none !important;
+}
+
+/* Light hover effect on rows */
+table.dataTable tbody tr:hover {
+     background-color: #f9f9f9 !important; /* Very light gray on hover */
+}
+
+/* Remove vertical borders */
+table.dataTable th,
+table.dataTable td {
+     border-right: none !important;
+}
+
+/* ===========================
+    Custom Scrollbar Styles
+    =========================== */
+/* Scrollbar track (background) */
+::-webkit-scrollbar-track {
+     background-color: #f1f1f1; /* Light gray */
+     border-radius: 4px;
+}
+
+/* Scrollbar thumb (handle) */
+::-webkit-scrollbar-thumb {
+     background-color: #5567bb; /* Blue/violet */
+     border-radius: 4px;
+}
+
+/* Scrollbar thumb on hover */
+::-webkit-scrollbar-thumb:hover {
+     background-color: #0a357f; /* Slightly darker on hover */
+}
+
+/* Firefox scrollbar */
+* {
+     scrollbar-color: #5567bb #f1f1f1; /* thumb track */
+     scrollbar-width: medium; /* width of the scrollbar */
+}
+
+/* ===========================
+    Network Card Customization
+    =========================== */
+#mynetwork.card-body {
+     background-color: #f8f9fa !important; /* Light gray background */
+     border: none !important; /* Remove border */
+     outline: 1px solid #ced4da !important; /* Add outline similar to border */
+}

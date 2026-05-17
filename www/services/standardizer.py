@@ -6,3 +6,7 @@ OPENALEX_MAPPING = {
     "cited_by_count": "TC",  # Times Cited
     # ... continuate con gli altri campi del glossario
 }
+
+
+
+ciao roberto

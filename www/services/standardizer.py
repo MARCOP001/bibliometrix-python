@@ -9,4 +9,3 @@ OPENALEX_MAPPING = {
 
 
 
-ciao roberto

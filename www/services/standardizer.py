@@ -7,5 +7,5 @@ OPENALEX_MAPPING = {
     # ... continuate con gli altri campi del glossario
 }
 
-
+Ciao roberto
 

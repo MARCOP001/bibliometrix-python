@@ -132,3 +132,9 @@ def parse_cochrane_data(datapath):
         data.append(current_record)
 
     return data
+
+
+
+
+
+#parser

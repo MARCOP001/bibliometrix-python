@@ -689,32 +689,23 @@ def convert2df(
     if not standardized_records:
         return pd.DataFrame(columns=column_order)
 
-# ... [tutto il codice precedente del ciclo for in convert2df rimane invariato] ...
-
-    if not standardized_records:
-        return pd.DataFrame(columns=column_order)
-
     df = pd.DataFrame(standardized_records)
 
-    # Garantiamo che tutte le colonne del glossario siano presenti [cite: 64]
+    # Garantiamo che tutte le colonne del glossario siano presenti
     for col in column_order:
         if col not in df.columns:
             default_val = _TYPE_DEFAULTS[COLUMN_TYPE_CONTRACTS[col]]
             df[col] = default_val
 
-# =========================================================================
+    # =========================================================================
     # FASE 4: CALCULATED FIELDS (SR) - Applicazione sul DataFrame
     # =========================================================================
     try:
-        # Importiamo la funzione reale dal modulo che hai individuato
         from www.services.metatagextraction import SR
-        
-        # Invochiamo la funzione originale passandole il DataFrame
         df = SR(df)
         
     except ImportError:
         print("[WARN] Funzione SR non trovata in www.services.metatagextraction. Applicazione fallback.")
-        # Fallback di sicurezza vettorizzato (utile per i test locali)
         if not df.empty:
             first_author = df["AU"].apply(
                 lambda x: str(x[0]).split(",")[0].strip() if isinstance(x, list) and len(x) > 0 else "Unknown"
@@ -722,5 +713,5 @@ def convert2df(
             df["SR"] = first_author + ", " + df["PY"].astype(str) + ", " + df["SO"].astype(str)
             df["SR"] = df["SR"].str.strip(", ")
 
-    # Restituiamo il DataFrame ordinato secondo il glossario [cite: 64, 65]
+    # Restituiamo il DataFrame ordinato secondo il glossario
     return df[column_order]

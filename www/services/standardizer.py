@@ -418,52 +418,6 @@ def reconstruct_abstract(raw_record: dict) -> str:
 
 
 # -----------------------------------------------------------------------------
-# 6.  SHORT REFERENCE (SR) – Calculated Field
-# -----------------------------------------------------------------------------
-
-def compute_short_reference(standardized_record: dict) -> str:
-    """
-    Calcola il campo SR (Short Reference) a partire dal record già standardizzato.
-
-    Formato atteso: "PrimoAutore_Cognome, Anno, Nome_Rivista"
-    Esempio: "Smith, 2021, NATURE"
-
-    NOTA IMPLEMENTATIVA (spec §Phase 4):
-    La spec richiede di invocare la funzione esistente nel codebase
-    Bibliometrix-Python (services/ o functions/). Il blocco try/except
-    tenta di usare quella funzione; se non disponibile (dipendenza non
-    installata o struttura diversa), viene usata questa implementazione
-    di fallback che rispetta lo stesso formato.
-
-    Args:
-        standardized_record: record già trasformato con i tag WoS.
-
-    Returns:
-        Stringa SR oppure "" se i campi necessari sono mancanti.
-    """
-    # --- Tentativo 1: funzione ufficiale bibliometrix-python ---
-    try:
-        # Il percorso esatto dipende dalla struttura del repo clonato.
-        # Aggiornare l'import in base alla posizione effettiva nel fork.
-        from bibliometrix.services.utils import short_reference  # type: ignore
-        return short_reference(standardized_record)
-    except ImportError:
-        pass  # Libreria non disponibile nell'ambiente corrente
-
-    # --- Fallback: implementazione locale conforme al formato WoS ---
-    authors: list[str] = standardized_record.get("AU", [])
-    year: str = standardized_record.get("PY", "")
-    journal: str = standardized_record.get("SO", "")
-
-    if not authors or not year:
-        return ""
-
-    first_author_surname = authors[0].split(",")[0].strip()
-    parts = [p for p in [first_author_surname, year, journal] if p]
-    return ", ".join(parts)
-
-
-# -----------------------------------------------------------------------------
 # 7.  TRASFORMAZIONE PRINCIPALE
 # -----------------------------------------------------------------------------
 
@@ -493,10 +447,6 @@ def transform_openalex_record(raw_record: dict) -> dict:
     # Se JI è vuoto o non esiste, usiamo il nome completo della rivista (SO) come ripiego
     if not standardized.get("JI") and standardized.get("SO"):
         standardized["JI"] = standardized["SO"]
-    # ------------------------------------------------
-
-    # 4. Campi derivati
-    standardized["SR"] = compute_short_reference(standardized)
 
     return standardized
 

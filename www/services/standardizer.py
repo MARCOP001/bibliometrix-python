@@ -32,38 +32,57 @@ def clean_scalar_fields(raw_record: dict) -> dict:
     return cleaned_scalars
 
 def extract_authors(raw_record: dict) -> list[str]:
-    """Estrae i nomi degli autori trasformandoli in una lista di stringhe[cite: 45, 76]."""
+    """Estrae i nomi degli autori e li formatta in 'Cognome, Nome'."""
     authorships = raw_record.get("authorships")
     
-    # Se il campo è nullo o mancante, restituiamo una lista vuota 
     if not authorships:
-        return [] [cite: 50]
+        return []
         
     author_list = []
     for auth in authorships:
-        # Navighiamo nella struttura di OpenAlex per prendere il nome visualizzato dell'autore
         author_data = auth.get("author", {})
         name = author_data.get("display_name")
+        
         if name:
-            author_list.append(str(name))
+            name_str = str(name)
+            # Logica semplice per convertire "Nome Cognome" in "Cognome, Nome"
+            parts = name_str.split()
+            if len(parts) > 1:
+                surname = parts[-1]
+                first_names = " ".join(parts[:-1])
+                formatted_name = f"{surname}, {first_names}"
+            else:
+                formatted_name = name_str # Se è una sola parola, la teniamo così
+                
+            author_list.append(formatted_name)
             
-    return author_list [cite: 45]
+    return author_list
 
 def transform_openalex_record(raw_record: dict) -> dict:
     """Orchestra la trasformazione del record applicando i contratti di tipo."""
-    standardized_record = clean_scalar_fields(raw_record)
     
-    # Integriamo i campi multi-valore
+    # 1. Creiamo lo scheletro completo per superare la validazione (tutte le colonne del glossario)
+    standardized_record = {
+        "DB": "", "UT": "", "DI": "", "PMID": "", "TI": "", 
+        "SO": "", "JI": "", "PY": "", "DT": "", "LA": "", 
+        "TC": 0, "RP": "", "AB": "", "VL": "", "IS": "", 
+        "BP": "", "EP": "", "SR": "",
+        "AU": [], "AF": [], "C1": [], "CR": [], "DE": [], "ID": []
+    }
+    
+    # 2. Sovrascriviamo con i campi scalari estratti da OpenAlex
+    extracted_scalars = clean_scalar_fields(raw_record)
+    standardized_record.update(extracted_scalars)
+    
+    # 3. Integriamo i campi complessi calcolati
     standardized_record["AU"] = extract_authors(raw_record)
+    # OpenAlex non fa molta differenza tra AU e AF, possiamo duplicarlo per sicurezza
+    standardized_record["AF"] = standardized_record["AU"] 
     standardized_record["C1"] = extract_affiliations(raw_record)  
     standardized_record["DE"] = extract_keywords(raw_record)
+    standardized_record["AB"] = reconstruct_abstract(raw_record)
     
-    # Ricostruiamo l'abstract invertito
-    standardized_record["AB"] = reconstruct_abstract(raw_record) # <--- Nuova integrazione
-    
-    # Campi temporaneamente vuoti
-    standardized_record["ID"] = []
-    standardized_record["CR"] = []
+    # CR verrà implementato a breve
     
     return standardized_record
 

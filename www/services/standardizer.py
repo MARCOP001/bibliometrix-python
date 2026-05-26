@@ -657,8 +657,10 @@ def convert2df(
     except ImportError:
         print("[WARN] Funzione SR non trovata in www.services.metatagextraction. Applicazione fallback.")
         if not df.empty:
+            # Fallback avanzato: gestisce sia le liste (memoria) sia le stringhe serializzate per CSV
             first_author = df["AU"].apply(
-                lambda x: str(x[0]).split(",")[0].strip() if isinstance(x, list) and len(x) > 0 else "Unknown"
+                lambda x: x[0].split(",")[0].strip() if isinstance(x, list) and len(x) > 0 
+                else (str(x).split(";")[0].split(",")[0].strip() if isinstance(x, str) and str(x).strip() else "Unknown")
             )
             df["SR"] = first_author + ", " + df["PY"].astype(str) + ", " + df["SO"].astype(str)
             df["SR"] = df["SR"].str.strip(", ")

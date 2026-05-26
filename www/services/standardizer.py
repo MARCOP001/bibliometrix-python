@@ -470,38 +470,30 @@ def compute_short_reference(standardized_record: dict) -> str:
 def transform_openalex_record(raw_record: dict) -> dict:
     """
     Orchestra la trasformazione di un singolo record OpenAlex nel formato WoS.
-
-    Sequenza operativa:
-      1. Crea lo scheletro completo con valori di default (tutti i tag del glossario)
-      2. Sovrascrive con i campi scalari estratti e castati
-      3. Integra i campi complessi (liste)
-      4. Calcola i campi derivati (SR)
-
-    Args:
-        raw_record: dizionario grezzo proveniente dall'API OpenAlex.
-
-    Returns:
-        Dizionario standardizzato conforme al glossario WoS (§4.2).
     """
-    # 1. Scheletro completo — garantisce che tutte le colonne esistano
-    #    anche se la sorgente non fornisce quel dato
+    # 1. Scheletro completo
     standardized: dict = {
         tag: _TYPE_DEFAULTS[contract]
         for tag, contract in COLUMN_TYPE_CONTRACTS.items()
     }
 
-    # 2. Campi scalari (str / int)
+    # 2. Campi scalari
     standardized.update(clean_scalar_fields(raw_record))
 
-    # 3. Campi complessi (list[str])
+    # 3. Campi complessi
     standardized["AU"] = extract_authors(raw_record)
-    standardized["AF"] = standardized["AU"]          # AF ≈ AU in OpenAlex
+    standardized["AF"] = standardized["AU"]          
     standardized["C1"] = extract_affiliations(raw_record)
     standardized["RP"] = extract_reprint_address(raw_record)
     standardized["DE"] = extract_keywords(raw_record)
     standardized["ID"] = extract_index_keywords(raw_record)
     standardized["CR"] = extract_references(raw_record)
     standardized["AB"] = reconstruct_abstract(raw_record)
+
+    # Se JI è vuoto o non esiste, usiamo il nome completo della rivista (SO) come ripiego
+    if not standardized.get("JI") and standardized.get("SO"):
+        standardized["JI"] = standardized["SO"]
+    # ------------------------------------------------
 
     # 4. Campi derivati
     standardized["SR"] = compute_short_reference(standardized)

@@ -58,6 +58,25 @@ def extract_authors(raw_record: dict) -> list[str]:
             
     return author_list
 
+def extract_references(raw_record: dict) -> list[str]:
+    """
+    Estrae i riferimenti citati (CR).
+    In OpenAlex, i referenced_works sono forniti come lista di ID.
+    """
+    references = raw_record.get("referenced_works")
+    
+    # Gestione dei valori mancanti o nulli
+    if not references:
+        return []
+        
+    reference_list = []
+    for ref in references:
+        if ref:
+            # Assicuriamoci che ogni riferimento sia una stringa
+            reference_list.append(str(ref))
+            
+    return reference_list
+
 def transform_openalex_record(raw_record: dict) -> dict:
     """Orchestra la trasformazione del record applicando i contratti di tipo."""
     
@@ -82,7 +101,11 @@ def transform_openalex_record(raw_record: dict) -> dict:
     standardized_record["DE"] = extract_keywords(raw_record)
     standardized_record["AB"] = reconstruct_abstract(raw_record)
     
-    # CR verrà implementato a breve
+    # ... (codice precedente dello scheletro e dei campi scalari/complessi) ...
+    standardized_record["AB"] = reconstruct_abstract(raw_record)
+    
+    # 4. Aggiungiamo i riferimenti citati
+    standardized_record["CR"] = extract_references(raw_record)
     
     return standardized_record
 

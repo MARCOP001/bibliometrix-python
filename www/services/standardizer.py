@@ -50,17 +50,88 @@ def extract_authors(raw_record: dict) -> list[str]:
     return author_list [cite: 45]
 
 def transform_openalex_record(raw_record: dict) -> dict:
-    """Orchestra la trasformazione del record applicando i contratti di tipo[cite: 13, 76]."""
-    # 1. Pulisce i campi scalari
+    """Orchestra la trasformazione del record applicando i contratti di tipo."""
     standardized_record = clean_scalar_fields(raw_record)
     
-    # 2. Integra i campi multi-valore convertiti in liste 
-    standardized_record["AU"] = extract_authors(raw_record) [cite: 45, 65]
+    # Integriamo i campi multi-valore
+    standardized_record["AU"] = extract_authors(raw_record)
+    standardized_record["C1"] = extract_affiliations(raw_record)  
+    standardized_record["DE"] = extract_keywords(raw_record)
     
-    # Nota: Qui aggiungerai le chiamate alle funzioni per C1, DE, CR ecc. 
-    # Se un campo del glossario non è ancora implementato, lo inseriamo vuoto per contratto [cite: 64]
-    standardized_record["C1"] = [] [cite: 50, 64, 65]
-    standardized_record["DE"] = [] [cite: 50, 64, 65]
-    standardized_record["ID"] = [] [cite: 50, 64, 65]
+    # Ricostruiamo l'abstract invertito
+    standardized_record["AB"] = reconstruct_abstract(raw_record) # <--- Nuova integrazione
+    
+    # Campi temporaneamente vuoti
+    standardized_record["ID"] = []
+    standardized_record["CR"] = []
     
     return standardized_record
+
+def extract_affiliations(raw_record: dict) -> list[str]:
+    """Estrae le affiliazioni degli autori (C1) come lista di stringhe."""
+    authorships = raw_record.get("authorships")
+    
+    if not authorships:
+        return []
+        
+    affiliation_list = []
+    for auth in authorships:
+        # Ogni autore può avere più istituzioni associate
+        institutions = auth.get("institutions", [])
+        for inst in institutions:
+            inst_name = inst.get("display_name")
+            # Evitiamo duplicati nella lista dell'articolo ed escludiamo i None 
+            if inst_name and str(inst_name) not in affiliation_list:
+                affiliation_list.append(str(inst_name))
+                
+    return affiliation_list
+
+def extract_keywords(raw_record: dict) -> list[str]:
+    """Estrae le parole chiave dell'autore (DE) convertendole in lista."""
+    keywords_data = raw_record.get("keywords")
+    
+    if not keywords_data:
+        return []
+        
+    keywords_list = []
+    for kw in keywords_data:
+        kw_name = kw.get("display_name")
+        if kw_name:
+            keywords_list.append(str(kw_name))
+            
+    return keywords_list
+
+def reconstruct_abstract(raw_record: dict) -> str:
+    """
+    Ricostruisce l'abstract di OpenAlex dal suo indice invertito.
+    Restituisce una stringa vuota se l'abstract non è presente.
+    """
+    inverted_index = raw_record.get("abstract_inverted_index")
+    
+    # Se il campo non esiste o è None, restituiamo stringa vuota per contratto
+    if not inverted_index:
+        return ""
+        
+    try:
+        # 1. Troviamo l'indice più alto (che corrisponde all'ultima parola)
+        # Iteriamo su tutte le liste di posizioni e troviamo il valore massimo
+        max_index = max(max(positions) for positions in inverted_index.values())
+        
+        # 2. Creiamo una lista vuota della giusta dimensione
+        # Lunghezza = indice massimo + 1 (perché gli indici partono da 0)
+        reconstructed_words = [""] * (max_index + 1)
+        
+        # 3. Posizioniamo ogni parola nel suo slot corretto
+        for word, positions in inverted_index.items():
+            for pos in positions:
+                reconstructed_words[pos] = word
+                
+        # 4. Uniamo la lista in un'unica stringa separata da spazi
+        # Usiamo ' '.join() per rimettere gli spazi tra le parole
+        return " ".join(reconstructed_words).strip()
+        
+    except Exception as e:
+        # Pratica sicura: se qualcosa va storto nella ricostruzione, 
+        # meglio restituire vuoto che far crashare l'intera pipeline
+        print(f"Errore nella ricostruzione dell'abstract: {e}")
+        return ""

@@ -9,25 +9,25 @@ OPENALEX_TO_WOS = {
 }
 
 def clean_scalar_fields(raw_record: dict) -> dict:
-    """Mappa e pulisce i campi scalari (stringhe/interi) eliminando i None[cite: 51, 65, 76]."""
+    """Mappa e pulisce i campi scalari (stringhe/interi) eliminando i None."""
     cleaned_scalars = {}
     
     # Impostiamo esplicitamente la provenienza del database come richiesto 
     cleaned_scalars["DB"] = "OPENALEX" 
     
-    # Applichiamo la Lookup Strategy per i campi standard [cite: 41, 42]
+    # Applichiamo la Lookup Strategy per i campi standard
     for oa_key, wos_tag in OPENALEX_TO_WOS.items():
         val = raw_record.get(oa_key)
         
         # Gestione specifica per le citazioni (Times Cited) che deve essere int 
         if wos_tag == "TC":
-            cleaned_scalars[wos_tag] = int(val) if val is not None else 0 [cite: 65]
+            cleaned_scalars[wos_tag] = int(val) if val is not None else 0
         # Gestione per l'anno di pubblicazione (deve essere stringa o int a 4 cifre) 
         elif wos_tag == "PY":
-            cleaned_scalars[wos_tag] = str(val) if val is not None else "" [cite: 51, 65]
+            cleaned_scalars[wos_tag] = str(val) if val is not None else ""
         # Gestione standard delle stringhe
         else:
-            cleaned_scalars[wos_tag] = str(val) if val is not None else "" [cite: 51]
+            cleaned_scalars[wos_tag] = str(val) if val is not None else ""
             
     return cleaned_scalars
 

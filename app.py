@@ -63,6 +63,10 @@ from google.genai import types
 from shiny import reactive, render
 from shinywidgets import render_widget
 from shiny.express import ui, input, render
+# --- IMPORT DELLA NUOVA PIPELINE ETL ---
+from www.services.file_extractor import extract_from_file
+from www.services.standardizer import convert2df
+from www.services.api_retriever import extract_data
 
 # Setup the Directory for static assets - optimized for performance
 base_dir = tempfile.gettempdir()  # Use system temp dir instead of creating new temp file
@@ -741,27 +745,70 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                 @render.express()
                 @reactive.event(input.start_button)
                 def mostra():
-                    database = get_database(input)
+                    selected_action = input.select()
+                    database_raw = input.database() if selected_action == "1A" else "Sample"
+                    
+                    # Nasconde la sidebar
                     ui.update_sidebar("sidebar_load_data", show=False)
                     ui.update_action_button("export_button", disabled=False)
-                    ui.markdown(f"<h3 style='text-align:center; color: #5567BB;'>Data of {database}</h3>")
+                    
+                    # Mappatura dei valori UI con i selettori attesi dallo Standardizer Dispatcher
+                    db_mapping = {
+                        "wos": "WEB_OF_SCIENCE",
+                        "scopus": "SCOPUS",
+                        "dimensions": "DIMENSIONS",
+                        "lens": "LENS",
+                        "pubmed": "PUBMED",
+                        "cochrane": "COCHRANE"
+                    }
+                    source_upper = db_mapping.get(database_raw, "OPENALEX")
+                    ui.markdown(f"<h3 style='text-align:center; color: #5567BB;'>Dati elaborati: {source_upper}</h3>")
 
-                    if database == "Sample":
-                        data = df.set(pd.read_excel("sources/samples/sample.xlsx"))
-                        reset_all_analyses()  # Reset analysis results when sample is loaded
+                    if selected_action == "1C": # Dati Sample di Test
+                        sample_data = pd.read_excel("sources/samples/sample.xlsx")
+                        df.set(sample_data)
+                        reset_all_analyses()
 
-                    @render.express()
-                    @reactive.event(input.Dataset)
-                    def show_data():
-                        text = get_data(input, database, df, reset_all_analyses)
-                        text
-                    ui.HTML(init_itables())
+                    elif selected_action == "1A": # Dati Locali (Base Level)
+                        files = input.Dataset()
+                        if files:
+                            all_raw_records = []
+                            # --- FASE 1: EXTRACT ---
+                            for file_info in files:
+                                file_path = file_info["datapath"]
+                                try:
+                                    raw_records = extract_from_file(file_path, source=source_upper)
+                                    all_raw_records.extend(raw_records)
+                                except Exception as e:
+                                    ui.notification_show(f"Errore di estrazione ({file_info['name']}): {e}", type="error", duration=8)
 
+                            # --- FASE 2, 3 e 4: TRANSFORM ---
+                            if all_raw_records:
+                                try:
+                                    standardized_df = convert2df(all_raw_records, source=source_upper, validate=True)
+                                    
+                                    # ---> AGGIUNGI QUESTE 3 RIGHE QUI <---
+                                    # Converte l'anno in numerico e rimuove le righe senza anno valido
+                                    standardized_df["PY"] = pd.to_numeric(standardized_df["PY"], errors="coerce")
+                                    standardized_df = standardized_df.dropna(subset=["PY"]) 
+                                    standardized_df["PY"] = standardized_df["PY"].astype(int)
+                                    
+                                    # --- FASE LOAD: Salvataggio nel reattivo Shiny ---
+                                    df.set(standardized_df)
+                                    reset_all_analyses()
+                                    ui.notification_show(f"✅ ETL completato con successo! Elaborati {len(standardized_df)} record.", duration=5)
+                                    
+                                except Exception as e:
+                                    ui.notification_show(f"❌ Errore durante la standardizzazione: {e}", type="error", duration=10)
+                                    
+                    # Renderizza la preview dei dati (sostituisce il vecchio show_data())
                     @render.ui
-                    @reactive.event(input.start_button)
                     def show_table():
-                        table_ui, _, _ = get_table(database, df)
-                        return table_ui
+                        current_data = df.get()
+                        if current_data is not None and not current_data.empty:
+                            html_table = current_data.head(100).to_html(classes="table table-striped", index=False)
+                            return ui.HTML(f"<div style='overflow-x: auto;'>{html_table}</div>")
+                        return ui.p("Nessun record caricato o elaborato.", style="color: gray;")
 
                     # -------- ADVICE BUTTON --------
                     @render.ui
@@ -788,6 +835,19 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                     @render.ui
                     @reactive.event(input.report_modal_completeness)
                     def show_missing_data_report():
+                        current_data = df.get()
+                        
+                        # Controllo di sicurezza
+                        if current_data is None or current_data.empty:
+                            return ui.p("Nessun dato disponibile per il report.")
+                            
+                        # --- FIX: RECUPERO DEL NOME DATABASE DAL DATAFRAME ---
+                        # Controlla se la colonna DB esiste e prende il primo valore
+                        if "DB" in current_data.columns and not current_data.empty:
+                            database = current_data["DB"].iloc[0]
+                        else:
+                            database = "Sconosciuto"
+                        
                         _, missingData, _ = get_table(database, df, modal=False)
                         dataframe = pd.read_html(io.StringIO(missingData))
                         report_excel.set(add_to_report(report_choices, report_excel, [dataframe[0]], [], "missingdata"))
@@ -801,6 +861,17 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                     @render.ui
                     @reactive.event(input.save_modal_completeness)
                     def save_dataframe_image():
+                        current_data = df.get()
+                        
+                        if current_data is None or current_data.empty:
+                            return
+                            
+                        if "DB" in current_data.columns and not current_data.empty:
+                            database = current_data["DB"].iloc[0]
+                        else:
+                            database = "Sconosciuto"
+                        
+                        # ... resto del tuo codice originale per salvare l'immagine ...
                         _, _, fig = get_table(database, df, dpi=dpi.get(), modal=False)
                         fig.write_image(completeness_table_image_path)
                         return ui.notification_show(f"✅ Missing data image saved into {completeness_table_image_path}", duration=5, close_button=False)
@@ -854,7 +925,59 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                 ),
 
         with ui.nav_panel("None", value="API"):
-            ui.h3("🚧 Warning: API is under construction 🚧")
+            ui.h3("🌐 Live API Retrieval", style="color: #5567BB;")
+            ui.p("Estrai i dati e applica la pipeline ETL (Advanced Level) interrogando direttamente le piattaforme open access.")
+            
+            with ui.layout_sidebar(fillable=False, fill=False):
+                with ui.sidebar(id="sidebar_api", position="right"):
+                    ui.h5("Filtri Ricerca", style="color: #5567BB;")
+                    ui.input_select("api_source", "Seleziona Piattaforma API:", {
+                        "openalex": "OpenAlex",
+                        "pubmed": "PubMed"
+                    })
+                    ui.input_text("api_query", "Testo della Query:", placeholder="es. machine learning")
+                    ui.input_action_button("btn_run_api", "Esegui Live API", icon=ICONS["play"], class_="btn-primary")
+            
+            with ui.card(full_screen=True):
+                @render.ui
+                @reactive.event(input.btn_run_api)
+                def esegui_pipeline_api():
+                    query = input.api_query()
+                    source = input.api_source()
+                    
+                    if not query:
+                        return ui.notification_show("Inserisci una query valida prima di eseguire.", type="warning")
+                        
+                    ui.notification_show("⏳ Interrogazione API in corso...", duration=10)
+                    
+                    try:
+                        # --- FASE 1: EXTRACT (via API) ---
+                        # Seleziona la funzione corretta richiamando api_retriever.py
+                        raw_records = extract_data(query=query, source=source)
+                        
+                        if not raw_records:
+                            return ui.notification_show("Nessun risultato compatibile trovato con la query.", type="warning")
+                            
+                        # --- FASE 2, 3 e 4: TRANSFORM E LOAD ---
+                        source_mapped = "OPENALEX" if source == "openalex" else "PUBMED"
+                        standardized_df = convert2df(raw_records, source=source_mapped, validate=True)
+                        
+                        # ---> AGGIUNGI QUESTE 3 RIGHE QUI <---
+                        # Prepara il dato per i calcoli temporali della UI
+                        standardized_df["PY"] = pd.to_numeric(standardized_df["PY"], errors="coerce")
+                        standardized_df = standardized_df.dropna(subset=["PY"])
+                        standardized_df["PY"] = standardized_df["PY"].astype(int)
+                        
+                        # Assegna i dati al DataFrame reattivo
+                        df.set(standardized_df)
+                        reset_all_analyses()
+                        
+                        # Se il fetch va a buon fine reindirizza alla Overview
+                        ui.update_navs("hidden_tabs", selected="overview")
+                        return ui.notification_show(f"✅ Download API completato! Creati e testati {len(standardized_df)} record uniformati.", duration=5)
+                        
+                    except Exception as e:
+                        return ui.notification_show(f"❌ Fallimento del processo API: {e}", type="error", duration=15)
         
         with ui.nav_panel("None", value="collections"):
             ui.h3("🚧 Warning: Merge Collection is under construction 🚧")

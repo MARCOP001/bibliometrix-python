@@ -1,5 +1,5 @@
 from .utils import *
-
+import re
 
 #### WEB OF SCIENCE PARSER ####
 def parse_wos_data(datapath):  # PARSER FOR WEB OF SCIENCE TXT and CIW
@@ -183,3 +183,84 @@ def parse_pubmed_medline_text(text: str) -> list[dict]:
         records.append(current_record)
 
     return records
+
+
+import xml.etree.ElementTree as ET
+
+def parse_pubmed_xml_node(article_node: ET.Element) -> dict:
+    """
+    Estrae le informazioni da un nodo <PubmedArticle> (XML) e le formatta
+    in un dizionario compatibile con lo standard Medline (chiavi PMID, TI, AU, ecc.).
+    Questo permette di riutilizzare la funzione transform_pubmed_record dello standardizer.
+    """
+    record = {}
+
+    # Helper interno per estrarre in sicurezza il testo dai nodi XML
+    def get_text(xpath: str, default: str = "") -> str:
+        node = article_node.find(xpath)
+        return node.text.strip() if node is not None and node.text else default
+
+    # Campi Scalari Diretti
+    record["PMID"] = get_text(".//MedlineCitation/PMID")
+    record["TI"] = get_text(".//ArticleTitle")
+    record["JT"] = get_text(".//Journal/Title")
+    record["TA"] = get_text(".//Journal/ISOAbbreviation")
+    
+    # In PubMed XML l'anno può essere in <Year> o dentro un <MedlineDate>
+    pub_date_year = get_text(".//PubDate/Year")
+    if not pub_date_year:
+        pub_date_year = get_text(".//PubDate/MedlineDate")[:4]
+    record["DP"] = pub_date_year
+    
+    record["VI"] = get_text(".//JournalIssue/Volume")
+    record["IP"] = get_text(".//JournalIssue/Issue")
+    record["PG"] = get_text(".//Pagination/MedlinePgn")
+    record["LA"] = get_text(".//Language")
+
+    # Abstract (può essere diviso in più tag <AbstractText> es. Background, Methods)
+    abstract_texts = article_node.findall(".//AbstractText")
+    if abstract_texts:
+        record["AB"] = " ".join([node.text.strip() for node in abstract_texts if node.text])
+
+    # DOI (LID in Medline)
+    doi_node = article_node.find(".//ArticleId[@IdType='doi']")
+    if doi_node is not None and doi_node.text:
+        record["LID"] = f"{doi_node.text} [doi]" # Manteniamo il format atteso dal tuo standardizer
+
+    # Liste Complesse: Autori e Affiliazioni
+    au_list = []
+    fau_list = []
+    affiliations = set() # Usiamo un set per evitare doppioni sulle istituzioni
+
+    for author in article_node.findall(".//Author"):
+        last_name = author.find("LastName")
+        initials = author.find("Initials")
+        fore_name = author.find("ForeName")
+
+        ln = last_name.text if last_name is not None and last_name.text else ""
+        init = initials.text if initials is not None and initials.text else ""
+        fn = fore_name.text if fore_name is not None and fore_name.text else ""
+
+        if ln:
+            au_list.append(f"{ln} {init}".strip())
+            fau_list.append(f"{ln}, {fn}".strip())
+
+        # Affiliazioni
+        affil = author.find(".//Affiliation")
+        if affil is not None and affil.text:
+            affiliations.add(affil.text)
+
+    if au_list: record["AU"] = au_list
+    if fau_list: record["FAU"] = fau_list
+    if affiliations: record["AD"] = list(affiliations)
+
+    # Liste Complesse: Keywords e Publication Types
+    keywords = article_node.findall(".//Keyword")
+    if keywords:
+        record["OT"] = [k.text for k in keywords if k.text]
+
+    pub_types = article_node.findall(".//PublicationType")
+    if pub_types:
+        record["PT"] = [pt.text for pt in pub_types if pt.text]
+
+    return record

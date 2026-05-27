@@ -222,6 +222,12 @@ _TYPE_DEFAULTS: dict[type, Any] = {
     list: [],
 }
 
+def _get_default_value(expected_type: type) -> Any:
+    """Restituisce una nuova istanza del valore di default per prevenire mutazioni condivise."""
+    if expected_type is list:
+        return []  # Genera una lista nuova ogni volta
+    return _TYPE_DEFAULTS.get(expected_type, "")
+
 # Delimitatore standard per la serializzazione CSV (Phase 2 spec)
 CSV_DELIMITER: str = ";"
 
@@ -561,7 +567,7 @@ def transform_openalex_record(raw_record: dict) -> dict:
     """
     # 1. Scheletro completo
     standardized: dict = {
-        tag: _TYPE_DEFAULTS[contract]
+        tag: _get_default_value(contract)
         for tag, contract in COLUMN_TYPE_CONTRACTS.items()
     }
 
@@ -593,7 +599,7 @@ def transform_openalex_csv_record(raw_record: dict) -> dict:
     Si occupa di splittare le stringhe separate da virgola o punto e virgola in liste.
     """
     standardized: dict = {
-        tag: _TYPE_DEFAULTS[contract]
+        tag: _get_default_value(contract)
         for tag, contract in COLUMN_TYPE_CONTRACTS.items()
     }
     
@@ -640,7 +646,7 @@ def transform_pubmed_record(raw_record: dict) -> dict:
     Converte un record estratto dal formato MEDLINE nei tag WoS standard.
     """
     standardized: dict = {
-        tag: _TYPE_DEFAULTS[contract]
+        tag: _get_default_value(contract)
         for tag, contract in COLUMN_TYPE_CONTRACTS.items()
     }
     
@@ -705,7 +711,7 @@ def transform_scopus_record(raw_record: dict) -> dict:
     o un punto e virgola.
     """
     standardized: dict = {
-        tag: _TYPE_DEFAULTS[contract]
+        tag: _get_default_value(contract)
         for tag, contract in COLUMN_TYPE_CONTRACTS.items()
     }
     
@@ -762,7 +768,7 @@ def transform_wos_record(raw_record: dict) -> dict:
     Supporta sia l'output del parser testuale (liste) sia quello CSV (stringhe piatte).
     """
     standardized: dict = {
-        tag: _TYPE_DEFAULTS[contract]
+        tag: _get_default_value(contract)
         for tag, contract in COLUMN_TYPE_CONTRACTS.items()
     }
     
@@ -808,7 +814,7 @@ def transform_dimensions_record(raw_record: dict) -> dict:
     nei tag WoS standard.
     """
     standardized: dict = {
-        tag: _TYPE_DEFAULTS[contract]
+        tag: _get_default_value(contract)
         for tag, contract in COLUMN_TYPE_CONTRACTS.items()
     }
     
@@ -874,7 +880,7 @@ def transform_cochrane_record(raw_record: dict) -> dict:
     con il punto e virgola, quindi applichiamo uno split.
     """
     standardized: dict = {
-        tag: _TYPE_DEFAULTS[contract]
+        tag: _get_default_value(contract)
         for tag, contract in COLUMN_TYPE_CONTRACTS.items()
     }
     
@@ -928,7 +934,7 @@ def transform_lens_record(raw_record: dict) -> dict:
     Lens separa quasi esclusivamente i campi multi-valore con il punto e virgola.
     """
     standardized: dict = {
-        tag: _TYPE_DEFAULTS[contract]
+        tag: _get_default_value(contract)
         for tag, contract in COLUMN_TYPE_CONTRACTS.items()
     }
     
@@ -1129,6 +1135,13 @@ def convert2df(
     """
     source_upper = source.upper()
 
+    if source_upper == "OPENALEX" and raw_records:
+        # Se non c'è la chiave complessa 'authorships' ma ci sono chiavi piatte da CSV,
+        # scambiamo dinamicamente il dispatcher verso la versione CSV.
+        first_record = raw_records[0]
+        if "authorships" not in first_record and ("author_display_names" in first_record or "publication_year" in first_record):
+            source_upper = "OPENALEX_CSV"
+
     if source_upper not in _TRANSFORM_DISPATCHER:
         registered = list(_TRANSFORM_DISPATCHER.keys())
         raise ValueError(
@@ -1174,7 +1187,12 @@ def convert2df(
             if for_csv_export:
                 df[col] = ""  # Se è per CSV, tutto deve essere testo vuoto
             else:
-                df[col] = _TYPE_DEFAULTS[COLUMN_TYPE_CONTRACTS[col]]
+                default_val = _TYPE_DEFAULTS[COLUMN_TYPE_CONTRACTS[col]]
+                # Se è una lista vuota, usiamo una list comprehension per coprire tutte le righe
+                if isinstance(default_val, list):
+                    df[col] = [[] for _ in range(len(df))]
+                else:
+                    df[col] = default_val
 
     # =========================================================================
     # FASE 4: CALCULATED FIELDS (SR) - Applicazione sul DataFrame

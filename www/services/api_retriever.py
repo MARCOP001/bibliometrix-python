@@ -18,6 +18,8 @@ from typing import Dict, List, Optional, Union
 from urllib.parse import quote_plus
 
 import requests
+from .parsers import parse_pubmed_xml_node
+from .parsers import parse_pubmed_medline_text, parse_wos_data, parse_cochrane_data
 
 # ---------------------------------------------------------------------------
 # Configurazione globale
@@ -180,6 +182,7 @@ def extract_openalex_data(
     query: str,
     output_dir: Path = _OUTPUT_DIR,
     only_with_abstract: bool = True,
+    max_results: int = 100, 
 ) -> List[Dict]:
     """
     Estrae i works da OpenAlex (paginazione cursor-based).
@@ -211,14 +214,10 @@ def extract_openalex_data(
         )
 
         cursor = data.get("meta", {}).get("next_cursor")
-        if not cursor:
-            print("  -> Nessun cursore successivo. Dataset completato.")
+        if not cursor or len(all_results) >= max_results:
+            print(f"  -> Raggiunto limite o fine risultati. Dataset completato.")
             break
-
-        risposta = input("\nScarica altri 25? (s/n): ").strip().lower()
-        if risposta != "s":
-            break
-
+        
         time.sleep(_PAGE_SLEEP)
         page_num += 1
 
@@ -233,12 +232,15 @@ def extract_openalex_data(
 def extract_pubmed_data(
     query: str,
     output_dir: Path = _OUTPUT_DIR,
+    only_with_abstract: bool = True, # mantenuto per coerenza di firma
+    max_results: int = 100, 
 ) -> List[Dict]:
     """
     Estrae i record da PubMed (paginazione offset-based, risposta XML).
-    Dopo ogni pagina chiede conferma per continuare.
+    L'estrazione è completamente automatizzata per essere usata tramite Dashboard.
+    Si ferma automaticamente al raggiungimento di max_results.
     Al termine salva un file XML con tutti gli articoli e restituisce
-    la lista di dict {"source": "pubmed", "raw_xml": "<PubmedArticle>..."}.
+    la lista di dict parsati (formato Medline).
     """
     sep = "=" * 70
     print(f"\n{sep}\nESTRAZIONE PUBMED — query: '{query}'\n{sep}")
@@ -281,34 +283,49 @@ def extract_pubmed_data(
         try:
             root = ET.fromstring(xml_data)
             articles = root.findall(".//PubmedArticle")
-            batch = [
-                {"source": "pubmed", "raw_xml": ET.tostring(art, encoding="unicode")}
-                for art in articles
-            ]
-            all_results.extend(batch)
-            raw_xml_list.extend(item["raw_xml"] for item in batch)
+            
+            # Salviamo le stringhe XML grezze per l'output su disco
+            batch_raw_xml = [ET.tostring(art, encoding="unicode") for art in articles]
+            raw_xml_list.extend(batch_raw_xml)
+            
+            # Generiamo i dizionari Medline per la pipeline in memoria
+            batch_parsed = [parse_pubmed_xml_node(art) for art in articles]
+            all_results.extend(batch_parsed)
+            
             print(
-                f"  -> Estratti {len(batch)} articoli XML "
+                f"  -> Estratti {len(batch_parsed)} articoli XML "
                 f"(totale: {len(all_results)} / {total_available} disponibili)"
             )
         except ET.ParseError as exc:
             print(f"  -> Errore nel parsing dell'XML: {exc}. Interruzione.")
             break
 
-        risposta = input("\nScarica altri 25? (s/n): ").strip().lower()
-        if risposta != "s":
+        # --- LE TUE MODIFICHE SONO QUI ---
+        
+        # 1. Se abbiamo raggiunto o superato il limite richiesto, ci fermiamo
+        if len(all_results) >= max_results:
+            print(f"  -> Raggiunto limite richiesto di {max_results} risultati. Completato.")
+            break
+            
+        # 2. Se l'API ha restituito meno risultati del previsto per una pagina, 
+        # significa che abbiamo esaurito gli articoli sul server
+        if len(id_list) < DEFAULT_PER_PAGE:
+            print("  -> Nessun altro articolo disponibile sul server. Completato.")
             break
 
+        # Niente più input() utente! Incrementiamo per il prossimo giro
         offset += DEFAULT_PER_PAGE
         page_num += 1
         time.sleep(_PAGE_SLEEP)
 
     if raw_xml_list:
-        save_pubmed_xml(raw_xml_list, output_dir)
+        # Tronca i file salvati se per caso nell'ultima pagina abbiamo sforato il max_results
+        save_pubmed_xml(raw_xml_list[:max_results], output_dir)
     else:
         print("  [ATTENZIONE] Nessun dato estratto. Nessun file salvato.")
 
-    return all_results
+    # Tronca la lista in memoria per rispettare esattamente il max_results
+    return all_results[:max_results]
 
 # ---------------------------------------------------------------------------
 # ENTRY POINT UNIFICATO

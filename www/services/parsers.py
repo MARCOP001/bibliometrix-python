@@ -128,7 +128,7 @@ def parse_cochrane_data(datapath):
         if 'Record' in current_record:
             del current_record['Record']
         if 'AB' in current_record and current_record['AB'].startswith('Abstract - Background'):
-            current_record['AB'] = current_record['AB'][20:].strip()
+            current_record['AB'] = current_record['AB'][22:].strip()
         data.append(current_record)
 
     return data

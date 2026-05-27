@@ -33,6 +33,20 @@ OPENALEX_SCALAR_MAP: dict[str, str] = {
     "type":             "DT",   # Tipo documento (Article, Review, …)
 }
 
+# -----------------------------------------------------------------------------
+# DIZIONARIO DI MAPPING PER OPENALEX (VERSIONE CSV)
+# -----------------------------------------------------------------------------
+OPENALEX_CSV_SCALAR_MAP: dict[str, str] = {
+    "id": "UT",                       # Identificatore Univoco
+    "doi": "DI",                      # DOI
+    "title": "TI",                    # Titolo documento
+    "publication_year": "PY",         # Anno di pubblicazione
+    "type": "DT",                     # Tipo documento
+    "cited_by_count": "TC",           # Citazioni
+    "host_venue": "SO",               # Nome rivista (nei CSV OA a volte è source_display_name)
+    "source_display_name": "SO"       # Inseriamo entrambe per robustezza
+}
+
 # Campi scalari annidati: (percorso_nested, tag_WoS)
 # Il percorso è una lista di chiavi da seguire nel dict raw.
 OPENALEX_NESTED_SCALAR_MAP: list[tuple[list[str], str]] = [
@@ -468,6 +482,54 @@ def transform_openalex_record(raw_record: dict) -> dict:
     return standardized
 
 # -----------------------------------------------------------------------------
+# FUNZIONE DI TRASFORMAZIONE PER OPENALEX CSV
+# -----------------------------------------------------------------------------
+def transform_openalex_csv_record(raw_record: dict) -> dict:
+    """
+    Converte una riga piatta di un CSV di OpenAlex nei tag WoS standard.
+    Si occupa di splittare le stringhe separate da virgola o punto e virgola in liste.
+    """
+    standardized: dict = {
+        tag: _TYPE_DEFAULTS[contract]
+        for tag, contract in COLUMN_TYPE_CONTRACTS.items()
+    }
+    
+    # Manteniamo il nome del DB corretto per le analisi a valle
+    standardized["DB"] = "OPENALEX"
+
+    # 1. Mappatura dei campi scalari diretti
+    for csv_key, wos_tag in OPENALEX_CSV_SCALAR_MAP.items():
+        if csv_key in raw_record and raw_record[csv_key]:
+            standardized[wos_tag] = _cast_scalar(raw_record[csv_key], COLUMN_TYPE_CONTRACTS[wos_tag])
+
+    # 2. Gestione dei campi Multi-Valore (Split delle stringhe)
+    
+    # Autori (AU e AF): Nel CSV di solito sono in una colonna "authors" o "author_display_names"
+    authors_str = str(raw_record.get("authors", raw_record.get("author_display_names", "")))
+    if authors_str and authors_str.strip():
+        # I CSV possono usare la virgola o il punto e virgola come separatore interno
+        separator = ";" if ";" in authors_str else ","
+        # Splittiamo e rimuoviamo gli spazi vuoti extra
+        authors_list = [a.strip() for a in authors_str.split(separator) if a.strip()]
+        
+        standardized["AU"] = authors_list
+        standardized["AF"] = authors_list
+
+    # Concetti / Index Keywords (ID): Di solito in "concepts" o "topics"
+    concepts_str = str(raw_record.get("concepts", ""))
+    if concepts_str and concepts_str.strip():
+        separator = ";" if ";" in concepts_str else ","
+        standardized["ID"] = [c.strip() for c in concepts_str.split(separator) if c.strip()]
+        
+    # Riferimenti Citati (CR): Di solito in "referenced_works"
+    refs_str = str(raw_record.get("referenced_works", ""))
+    if refs_str and refs_str.strip():
+        separator = ";" if ";" in refs_str else ","
+        standardized["CR"] = [r.strip() for r in refs_str.split(separator) if r.strip()]
+
+    return standardized
+
+# -----------------------------------------------------------------------------
 # FUNZIONE DI TRASFORMAZIONE PER PUBMED
 # -----------------------------------------------------------------------------
 def transform_pubmed_record(raw_record: dict) -> dict:
@@ -541,10 +603,13 @@ def transform_pubmed_record(raw_record: dict) -> dict:
 #   2. Aggiungere la voce "SCOPUS": transform_scopus_record qui sotto
 
 _TRANSFORM_DISPATCHER: dict[str, Any] = {
-    "OPENALEX": transform_openalex_record,
-    # "SCOPUS":   transform_scopus_record,    # da implementare
-    "PUBMED":   transform_pubmed_record    # da implementare
-    # "DIMENSIONS": transform_dimensions_record,
+    "WEB_OF_SCIENCE": transform_wos_record,
+    "SCOPUS":         transform_scopus_record,
+    "PUBMED":         transform_pubmed_record,
+    "OPENALEX":       transform_openalex_record,
+    "OPENALEX_CSV":   transform_openalex_csv_record,
+    "DIMENSIONS":     transform_dimensions_record,
+    "LENS":           transform_lens_record,
 }
 
 

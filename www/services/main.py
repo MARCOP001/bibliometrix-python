@@ -9,6 +9,7 @@ intervento manuale sui file, come richiesto dalla specifica Advanced.
 import pandas as pd
 from api_retriever import extract_data
 from standardizer import convert2df
+from file_extractor import extract_from_file
 
 def run_etl_pipeline(query: str, source: str = "openalex", output_csv: str = "bibliometrix_export.csv") -> pd.DataFrame | None:
     """
@@ -82,3 +83,32 @@ if __name__ == "__main__":
         source="openalex",
         output_csv="risultati_finali.csv"
     )
+
+"""
+# 1. Importiamo le funzioni dai nostri moduli
+from file_extractor import extract_from_file
+from standardizer import convert2df
+
+# 2. Definiamo il file di test (assicurati che il file csv esista davvero sul tuo pc)
+mio_file_csv = "openalex_export.csv" 
+
+try:
+    # 3. Fase 1: Estrazione (Legge il file e crea i raw_records)
+    print("Inizio estrazione...")
+    raw_records = extract_from_file(mio_file_csv, source="OPENALEX_CSV")
+    
+    # 4. Fase 2: Trasformazione (Pulisce i dati e applica i mapping)
+    if raw_records:
+        print("Inizio standardizzazione...")
+        df_pulito = convert2df(raw_records, source="OPENALEX_CSV")
+        
+        # Mostriamo il risultato
+        print("\nSuccesso! Ecco le prime 3 righe del DataFrame standardizzato:")
+        print(df_pulito.head(3))
+    else:
+        print("L'estrazione non ha prodotto record.")
+
+except Exception as e:
+    print(f"Ops, qualcosa è andato storto: {e}")
+"""
+

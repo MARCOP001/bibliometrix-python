@@ -19,13 +19,12 @@ from urllib.parse import quote_plus
 
 import requests
 from .parsers import parse_pubmed_xml_node
-from .parsers import parse_pubmed_medline_text, parse_wos_data, parse_cochrane_data
 
 # ---------------------------------------------------------------------------
 # Configurazione globale
 # ---------------------------------------------------------------------------
 
-MAILTO: str = os.environ.get("BIBLIOMETRIX_EMAIL", "aniello.il.gay@viva_cazzo.it")
+MAILTO: str = os.environ.get("BIBLIOMETRIX_EMAIL", "aniellomarcorobe@progetto.it")
 DEFAULT_PER_PAGE: int = 25
 DEFAULT_MAX_RETRIES: int = 3
 _PAGE_SLEEP: float = 0.35          # ≤ 3 req/s su PubMed

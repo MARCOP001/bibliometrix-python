@@ -1,49 +1,50 @@
 """
 extract.py — Fase 1 (Extract) della Pipeline ETL Bibliometrix.
 
-Responsabilità:
-    - Costruire gli URL per le API supportate.
-    - Eseguire chiamate HTTP in modo sicuro (retry + backoff esponenziale).
-    - Gestire la paginazione interattiva tramite cursor (OpenAlex).
-    - Esporre un unico entry-point: extract_data(query, source).
-
-Sorgenti attualmente supportate:
-    - OpenAlex  (JSON REST, paginazione via cursor)
+Output su disco:
+  - OpenAlex  →  <output_dir>/openalex_<timestamp>.json
+  - PubMed    →  <output_dir>/pubmed_<timestamp>.xml
 """
 
+from __future__ import annotations
+
+import json
 import os
 import time
-import requests
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Union
 from urllib.parse import quote_plus
-from typing import Optional
+
+import requests
 
 # ---------------------------------------------------------------------------
 # Configurazione globale
 # ---------------------------------------------------------------------------
 
-# L'email viene letta da una variabile d'ambiente; se assente si usa il
-# valore di default. OpenAlex la usa per dare priorità al tuo traffico.
-MAILTO: str = os.environ.get("BIBLIOMETRIX_EMAIL", "roberto.gargiulo5@studenti.unina.it")
-
-# Numero di articoli richiesti per ogni singola pagina API.
+MAILTO: str = os.environ.get("BIBLIOMETRIX_EMAIL", "aniello.il.gay@viva_cazzo.it")
 DEFAULT_PER_PAGE: int = 25
-
-# Tentativi massimi prima di considerare una chiamata fallita.
 DEFAULT_MAX_RETRIES: int = 3
-
-# Pausa di cortesia (secondi) tra una pagina e la successiva.
-_PAGE_SLEEP: float = 0.15
-
+_PAGE_SLEEP: float = 0.35          # ≤ 3 req/s su PubMed
+_OUTPUT_DIR: Path = Path("data/raw")  # cartella di output di default
 
 # ---------------------------------------------------------------------------
 # LIVELLO 1 — Costruttori URL
 # ---------------------------------------------------------------------------
 
-def build_openalex_url(query: str, cursor: str = "*", per_page: int = DEFAULT_PER_PAGE) -> str:
+def build_openalex_url(
+    query: str,
+    cursor: str = "*",
+    per_page: int = DEFAULT_PER_PAGE,
+    only_with_abstract: bool = True,
+) -> str:
     """
-    Costruisce l'URL per l'API di OpenAlex con paginazione via cursor.
+    Costruisce l'URL per OpenAlex Works Search.
+    Se only_with_abstract=True aggiunge filter=has_abstract:true,
+    molto utile per pipeline bibliometriche.
     """
-    encoded_query: str = quote_plus(query)
+    encoded_query = quote_plus(query)
     url = (
         f"https://api.openalex.org/works"
         f"?search={encoded_query}"
@@ -51,183 +52,313 @@ def build_openalex_url(query: str, cursor: str = "*", per_page: int = DEFAULT_PE
         f"&per-page={per_page}"
         f"&mailto={MAILTO}"
     )
+    if only_with_abstract:
+        url += "&filter=has_abstract:true"
     return url
 
 
+def build_pubmed_search_url(
+    query: str, retstart: int, retmax: int = DEFAULT_PER_PAGE
+) -> str:
+    """Cerca gli PMID su PubMed (risposta JSON)."""
+    encoded_query = quote_plus(query)
+    return (
+        f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+        f"?db=pubmed&term={encoded_query}&retstart={retstart}&retmax={retmax}"
+        f"&retmode=json&email={MAILTO}"
+    )
+
+
+def build_pubmed_fetch_url(id_list: List[str]) -> str:
+    """Scarica i record completi in formato XML dato un elenco di PMID."""
+    ids = ",".join(id_list)
+    return (
+        f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+        f"?db=pubmed&id={ids}&retmode=xml&email={MAILTO}"
+    )
+
 # ---------------------------------------------------------------------------
-# LIVELLO 2 — Fetcher sicuro con retry e backoff esponenziale
+# LIVELLO 2 — Fetcher con retry e backoff esponenziale
 # ---------------------------------------------------------------------------
 
 def fetch_data_with_retries(
     url: str,
     max_retries: int = DEFAULT_MAX_RETRIES,
-) -> Optional[dict]:
+    response_format: str = "json",
+) -> Optional[Union[Dict, str]]:
     """
-    Esegue una richiesta HTTP GET con logica di retry e backoff esponenziale.
+    Scarica un URL con gestione automatica di:
+      - Rate-limit 429 (rispetta l'header Retry-After)
+      - Errori server 5xx (backoff esponenziale)
+      - Timeout / problemi di rete
+
+    Restituisce dict (JSON) o str (XML/testo) oppure None se tutti i tentativi falliscono.
     """
-    headers = {
-        "User-Agent": f"bibliometrix-python/1.0 (mailto:{MAILTO})",
-        "Accept": "application/json",
+    headers: Dict[str, str] = {
+        "User-Agent": f"bibliometrix-python/1.0 (mailto:{MAILTO})"
     }
+    if response_format == "json":
+        headers["Accept"] = "application/json"
 
     for attempt in range(max_retries):
-        wait_time: float = 2 ** attempt  # 1s → 2s → 4s
-
+        wait_time: float = 2 ** attempt
         try:
-            print(f"  -> GET {url[:90]}{'...' if len(url) > 90 else ''} "
-                  f"(tentativo {attempt + 1}/{max_retries})")
-
+            preview = url[:90] + ("..." if len(url) > 90 else "")
+            print(f"  -> GET {preview} (tentativo {attempt + 1}/{max_retries})")
             response = requests.get(url, headers=headers, timeout=15)
 
-            # — Successo —
             if response.status_code == 200:
-                return response.json()
+                return response.json() if response_format == "json" else response.text
 
-            # — Rate limit: aspetta e riprova —
-            elif response.status_code == 429:
+            if response.status_code == 429:
                 retry_after = float(response.headers.get("Retry-After", wait_time))
                 print(f"  -> 429 Rate limit. Attendo {retry_after:.0f}s...")
                 time.sleep(retry_after)
 
-            # — Errori server transitori: aspetta e riprova —
             elif response.status_code in (500, 502, 503, 504):
                 print(f"  -> {response.status_code} Errore server. Attendo {wait_time:.0f}s...")
                 time.sleep(wait_time)
 
-            # — Qualsiasi altro errore HTTP (4xx): non recuperabile —
             else:
-                print(f"  -> Errore {response.status_code} non recuperabile. "
-                      f"Messaggio: {response.text[:120]}")
+                print(f"  -> Errore {response.status_code}: {response.text[:120]}")
                 return None
 
-        except requests.exceptions.Timeout:
-            print(f"  -> Timeout dopo 15s. Attendo {wait_time:.0f}s e riprovo...")
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            print(f"  -> Errore di rete ({type(exc).__name__}). Attendo {wait_time:.0f}s...")
             time.sleep(wait_time)
 
-        except requests.exceptions.ConnectionError as exc:
-            print(f"  -> Errore di connessione: {exc}. Attendo {wait_time:.0f}s e riprovo...")
-            time.sleep(wait_time)
-
-    # Tutti i tentativi esauriti
-    print(f"  [FALLIMENTO] Impossibile raggiungere l'endpoint dopo {max_retries} tentativi.")
+    print("  [FALLIMENTO] Impossibile raggiungere l'endpoint dopo tutti i tentativi.")
     return None
 
+# ---------------------------------------------------------------------------
+# LIVELLO 3 — Salvataggio su disco
+# ---------------------------------------------------------------------------
+
+def _ensure_output_dir(output_dir: Path) -> None:
+    """Crea la cartella di output se non esiste."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+
+def save_openalex_json(results: List[Dict], output_dir: Path) -> Path:
+    """Serializza la lista di works OpenAlex in un file JSON."""
+    _ensure_output_dir(output_dir)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filepath = output_dir / f"openalex_{timestamp}.json"
+    with open(filepath, "w", encoding="utf-8") as fh:
+        json.dump(results, fh, ensure_ascii=False, indent=2)
+    print(f"\n[SALVATAGGIO] OpenAlex JSON → {filepath}  ({len(results)} record)")
+    return filepath
+
+
+def save_pubmed_xml(articles_xml: List[str], output_dir: Path) -> Path:
+    """
+    Avvolge tutti gli articoli XML in un tag radice <PubmedArticleSet>
+    e salva il file .xml, pronto per essere riletto con ET.parse().
+    """
+    _ensure_output_dir(output_dir)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filepath = output_dir / f"pubmed_{timestamp}.xml"
+
+    root = ET.Element("PubmedArticleSet")
+    for raw in articles_xml:
+        try:
+            root.append(ET.fromstring(raw))
+        except ET.ParseError as exc:
+            print(f"  -> Articolo ignorato per errore XML: {exc}")
+
+    tree = ET.ElementTree(root)
+    ET.indent(tree, space="  ")          # indentazione leggibile (Python ≥ 3.9)
+    tree.write(filepath, encoding="unicode", xml_declaration=True)
+    print(f"[SALVATAGGIO] PubMed XML → {filepath}  ({len(articles_xml)} record)")
+    return filepath
 
 # ---------------------------------------------------------------------------
-# LIVELLO 3 — Orchestratore OpenAlex Interattivo
+# LIVELLO 4 — Orchestratori interattivi
 # ---------------------------------------------------------------------------
 
-def extract_openalex_data(query: str) -> list[dict]:
+def extract_openalex_data(
+    query: str,
+    output_dir: Path = _OUTPUT_DIR,
+    only_with_abstract: bool = True,
+) -> List[Dict]:
     """
-    Scarica articoli da OpenAlex in modo interattivo.
-    Dopo ogni pagina, mostra il conteggio totale e chiede all'utente se procedere.
+    Estrae i works da OpenAlex (paginazione cursor-based).
+    Dopo ogni pagina chiede conferma per continuare.
+    Al termine salva il file JSON e restituisce la lista dei record.
     """
-    print(f"\n{'='*70}")
-    print(f"ESTRAZIONE OPENALEX INTERATTIVA — query: '{query}'")
-    print(f"{'='*70}")
+    sep = "=" * 70
+    print(f"\n{sep}\nESTRAZIONE OPENALEX — query: '{query}'\n{sep}")
 
-    all_results: list[dict] = []
-    cursor: str = "*"  # Cursore iniziale OpenAlex
+    all_results: List[Dict] = []
+    cursor: str = "*"
     page_num: int = 1
 
     while True:
-        print(f"\n--- Estrazione Pagina {page_num} ---")
+        print(f"\n--- Pagina {page_num} ---")
+        url = build_openalex_url(query, cursor=cursor, only_with_abstract=only_with_abstract)
+        data = fetch_data_with_retries(url, response_format="json")
 
-        # 1. Costruisci URL con il cursor corrente
-        url = build_openalex_url(query, cursor=cursor)
-
-        # 2. Chiama l'API in modo sicuro
-        data = fetch_data_with_retries(url)
-
-        # 3. Gestione risposta fallita
-        if data is None:
-            print("  -> Chiamata fallita. Interrompo l'estrazione.")
+        if not data or not data.get("results"):
+            print("  -> Nessun risultato o risposta vuota. Fine estrazione.")
             break
 
-        # 4. Estrai i risultati
-        results: list[dict] = data.get("results", [])
-        if not results:
-            print("  -> Pagina vuota. Fine dataset raggiunta.")
-            break
-
+        results: List[Dict] = data["results"]
         all_results.extend(results)
-        total_available: int = data.get("meta", {}).get("count", "?")
-        
-        print(f"  -> Successo: +{len(results)} articoli.")
-        print(f"  -> Totale scaricati finora: {len(all_results)} | Disponibili su OpenAlex: {total_available}")
+        total_available = data.get("meta", {}).get("count", "?")
+        print(
+            f"  -> Estratti {len(results)} works "
+            f"(totale: {len(all_results)} / {total_available} disponibili)"
+        )
 
-        # 5. Leggi il cursore per la pagina successiva
         cursor = data.get("meta", {}).get("next_cursor")
         if not cursor:
-            print("  -> Nessun next_cursor ricevuto. Fine dataset.")
+            print("  -> Nessun cursore successivo. Dataset completato.")
             break
 
-        # 6. Interazione utente
-        risposta = input("\nVuoi scaricare la pagina successiva? (s/n): ").strip().lower()
-        if risposta != 's':
-            print("  -> Estrazione interrotta dall'utente.")
+        risposta = input("\nScarica altri 25? (s/n): ").strip().lower()
+        if risposta != "s":
             break
 
-        # Piccola pausa di cortesia verso il server
         time.sleep(_PAGE_SLEEP)
         page_num += 1
 
-    print(f"\n{'='*70}")
-    print(f"ESTRAZIONE COMPLETATA — {len(all_results)} articoli totali raccolti.")
-    print(f"{'='*70}\n")
+    if all_results:
+        save_openalex_json(all_results, output_dir)
+    else:
+        print("  [ATTENZIONE] Nessun dato estratto. Nessun file salvato.")
+
     return all_results
 
 
+def extract_pubmed_data(
+    query: str,
+    output_dir: Path = _OUTPUT_DIR,
+) -> List[Dict]:
+    """
+    Estrae i record da PubMed (paginazione offset-based, risposta XML).
+    Dopo ogni pagina chiede conferma per continuare.
+    Al termine salva un file XML con tutti gli articoli e restituisce
+    la lista di dict {"source": "pubmed", "raw_xml": "<PubmedArticle>..."}.
+    """
+    sep = "=" * 70
+    print(f"\n{sep}\nESTRAZIONE PUBMED — query: '{query}'\n{sep}")
+
+    all_results: List[Dict] = []
+    raw_xml_list: List[str] = []   # usato solo per il salvataggio finale
+    offset: int = 0
+    page_num: int = 1
+
+    while True:
+        print(f"\n--- Pagina {page_num} ---")
+
+        # 1. Recupera gli PMID (JSON)
+        search_url = build_pubmed_search_url(query, retstart=offset)
+        search_data = fetch_data_with_retries(search_url, response_format="json")
+
+        if not search_data:
+            print("  -> Ricerca PMID fallita. Interruzione.")
+            break
+
+        esearch = search_data.get("esearchresult", {})
+        id_list: List[str] = esearch.get("idlist", [])
+        total_available: str = esearch.get("count", "?")
+
+        if not id_list:
+            print("  -> Nessun PMID trovato. Fine dataset.")
+            break
+
+        # Pausa tra la ricerca e il fetch (rispetta i 3 req/s di NCBI)
+        time.sleep(_PAGE_SLEEP)
+
+        # 2. Scarica i record completi (XML)
+        fetch_url = build_pubmed_fetch_url(id_list)
+        xml_data: Optional[str] = fetch_data_with_retries(fetch_url, response_format="xml")
+
+        if not xml_data:
+            print("  -> Fetch XML fallito. Interruzione.")
+            break
+
+        try:
+            root = ET.fromstring(xml_data)
+            articles = root.findall(".//PubmedArticle")
+            batch = [
+                {"source": "pubmed", "raw_xml": ET.tostring(art, encoding="unicode")}
+                for art in articles
+            ]
+            all_results.extend(batch)
+            raw_xml_list.extend(item["raw_xml"] for item in batch)
+            print(
+                f"  -> Estratti {len(batch)} articoli XML "
+                f"(totale: {len(all_results)} / {total_available} disponibili)"
+            )
+        except ET.ParseError as exc:
+            print(f"  -> Errore nel parsing dell'XML: {exc}. Interruzione.")
+            break
+
+        risposta = input("\nScarica altri 25? (s/n): ").strip().lower()
+        if risposta != "s":
+            break
+
+        offset += DEFAULT_PER_PAGE
+        page_num += 1
+        time.sleep(_PAGE_SLEEP)
+
+    if raw_xml_list:
+        save_pubmed_xml(raw_xml_list, output_dir)
+    else:
+        print("  [ATTENZIONE] Nessun dato estratto. Nessun file salvato.")
+
+    return all_results
+
 # ---------------------------------------------------------------------------
-# ENTRY POINT UNIFICATO — dispatcher per sorgente
+# ENTRY POINT UNIFICATO
 # ---------------------------------------------------------------------------
 
-def extract_data(query: str, source: str) -> list[dict]:
+def extract_data(
+    query: str,
+    source: str,
+    output_dir: Union[str, Path] = _OUTPUT_DIR,
+) -> List[Dict]:
     """
-    Entry point unico per la Fase 1 dell'ETL. Instrada la richiesta alla
-    funzione di estrazione corretta in base alla sorgente selezionata.
-    """
-    normalized_source = source.lower().strip()
+    Punto di ingresso pubblico.
 
-    dispatch_table = {
-        "openalex": extract_openalex_data,
-        # "pubmed": extract_pubmed_data,  # da aggiungere nella prossima iterazione
+    Parametri
+    ----------
+    query       : stringa di ricerca bibliografica
+    source      : "openalex" oppure "pubmed"
+    output_dir  : cartella dove scrivere i file grezzi (default: data/raw)
+
+    Restituisce
+    -----------
+    Lista di dict con i record estratti.
+    Salva anche i file su disco nella output_dir.
+    """
+    output_path = Path(output_dir)
+    normalized = source.lower().strip()
+
+    dispatch: Dict[str, object] = {
+        "openalex": lambda q: extract_openalex_data(q, output_dir=output_path),
+        "pubmed":   lambda q: extract_pubmed_data(q, output_dir=output_path),
     }
 
-    if normalized_source not in dispatch_table:
-        supported = ", ".join(f'"{k}"' for k in dispatch_table)
+    if normalized not in dispatch:
         raise ValueError(
-            f"Sorgente '{source}' non supportata. "
-            f"Valori accettati: {supported}."
+            f"Sorgente '{source}' non supportata. Usa 'openalex' oppure 'pubmed'."
         )
 
-    extractor = dispatch_table[normalized_source]
-    return extractor(query)
+    return dispatch[normalized](query)
 
 
 # ---------------------------------------------------------------------------
-# BLOCCO DI TEST — si attiva solo con: python extract.py
+# ESECUZIONE DIRETTA (per test rapidi)
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    TEST_QUERY = "machine learning"
-    TEST_SOURCE = "openalex"
+    import sys
 
-    print(f"Avvio test interattivo con query='{TEST_QUERY}' e source='{TEST_SOURCE}'\n")
+    query_test = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else "machine learning bibliometrics"
+    print(f"Query di test: '{query_test}'")
 
-    try:
-        risultati = extract_data(TEST_QUERY, source=TEST_SOURCE)
-    except ValueError as e:
-        print(f"Errore configurazione: {e}")
-        risultati = []
-
-    if risultati:
-        print(f"\nPrimi 3 articoli estratti come prova:")
-        for i, record in enumerate(risultati[:3], start=1):
-            title = record.get("title") or "Titolo mancante"
-            year = record.get("publication_year", "N/A")
-            doi = record.get("doi") or "N/A"
-            print(f"  {i}. [{year}] {title[:80]}")
-            print(f"        DOI: {doi}")
-    else:
-        print("Nessun risultato ottenuto.")
+    for src in ("openalex", "pubmed"):
+        records = extract_data(query_test, source=src)
+        print(f"\n→ {src}: {len(records)} record estratti.\n")

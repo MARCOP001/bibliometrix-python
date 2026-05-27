@@ -3,7 +3,7 @@ import os
 import re
 
 # Importiamo i parser per i file di testo proprietari
-from parsers import parse_pubmed_medline_text, parse_wos_data
+from parsers import parse_pubmed_medline_text, parse_wos_data, parse_cochrane_data
 
 def extract_from_file(file_path: str, source: str) -> list[dict]:
     """
@@ -33,6 +33,8 @@ def extract_from_file(file_path: str, source: str) -> list[dict]:
         elif source_upper == "WEB_OF_SCIENCE":
             # Usiamo la funzione del pacchetto originale
             return parse_wos_data(file_path)
+        elif source_upper == "COCHRANE":
+            return parse_cochrane_data(file_path)
             
         else:
             raise ValueError(

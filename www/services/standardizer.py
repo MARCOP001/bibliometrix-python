@@ -47,6 +47,109 @@ OPENALEX_CSV_SCALAR_MAP: dict[str, str] = {
     "source_display_name": "SO"       # Inseriamo entrambe per robustezza
 }
 
+# -----------------------------------------------------------------------------
+# DIZIONARIO DI MAPPING PER SCOPUS (CSV EXPORT)
+# -----------------------------------------------------------------------------
+SCOPUS_SCALAR_MAP: dict[str, str] = {
+    "EID": "UT",                           # Scopus Unique ID
+    "DOI": "DI",                           # DOI
+    "Title": "TI",                         # Titolo
+    "Source title": "SO",                  # Nome Rivista
+    "Abbreviated Source Title": "JI",      # Abbreviazione Rivista
+    "Year": "PY",                          # Anno
+    "Document Type": "DT",                 # Tipo documento
+    "Cited by": "TC",                      # Citazioni
+    "Abstract": "AB",                      # Abstract
+    "Volume": "VL",                        # Volume
+    "Issue": "IS",                         # Fascicolo
+    "Page start": "BP",                    # Pagina iniziale
+    "Page end": "EP",                      # Pagina finale
+    "PubMed ID": "PMID",                   # PMID (se presente)
+    "Language of Original Document": "LA", # Lingua
+    "Correspondence Address": "RP",        # Indirizzo di Reprint/Corrispondenza
+}
+
+# -----------------------------------------------------------------------------
+# DIZIONARIO DI MAPPING PER WEB OF SCIENCE
+# -----------------------------------------------------------------------------
+# WoS usa nativamente i tag corretti, ma li mappiamo per coerenza
+# e per applicare i type contracts.
+WOS_SCALAR_MAP: dict[str, str] = {
+    "UT": "UT",
+    "DI": "DI",
+    "PM": "PMID",  # In WoS a volte PubMed ID è 'PM'
+    "TI": "TI",
+    "SO": "SO",
+    "JI": "JI",
+    "PY": "PY",
+    "DT": "DT",
+    "LA": "LA",
+    "RP": "RP",
+    "AB": "AB",
+    "VL": "VL",
+    "IS": "IS",
+    "BP": "BP",
+    "EP": "EP",
+    "TC": "TC", # In WoS (Z9 o TC dipendentemente dall'export)
+    "Z9": "TC"
+}
+
+# -----------------------------------------------------------------------------
+# DIZIONARIO DI MAPPING PER DIMENSIONS (CSV / XLSX EXPORT)
+# -----------------------------------------------------------------------------
+DIMENSIONS_SCALAR_MAP: dict[str, str] = {
+    "Publication ID": "UT",            # Dimensions Unique ID
+    "DOI": "DI",                       # DOI
+    "PMID": "PMID",                    # PubMed ID
+    "Title": "TI",                     # Titolo
+    "Source title": "SO",              # Nome Rivista (o Venue)
+    "PubYear": "PY",                   # Anno
+    "Publication Type": "DT",          # Tipo documento
+    "Times cited": "TC",               # Citazioni
+    "Abstract": "AB",                  # Abstract
+    "Volume": "VL",                    # Volume
+    "Issue": "IS",                     # Fascicolo
+    # La colonna Pagination la mappiamo temporaneamente su BP, 
+    # poi la splittiamo in BP ed EP nella funzione di trasformazione
+    "Pagination": "BP",                
+}
+
+# -----------------------------------------------------------------------------
+# DIZIONARIO DI MAPPING PER LENS (CSV EXPORT)
+# -----------------------------------------------------------------------------
+LENS_SCALAR_MAP: dict[str, str] = {
+    "Lens ID": "UT",                   # Lens Unique ID
+    "DOI": "DI",                       # DOI
+    "PMID": "PMID",                    # PubMed ID
+    "Title": "TI",                     # Titolo
+    "Publication Year": "PY",          # Anno di pubblicazione
+    "Publication Type": "DT",          # Tipo documento
+    "Source Title": "SO",              # Nome Rivista
+    "Volume": "VL",                    # Volume
+    "Issue": "IS",                     # Fascicolo
+    "Start Page": "BP",                # Pagina iniziale
+    "End Page": "EP",                  # Pagina finale
+    "Abstract": "AB",                  # Abstract
+    "Citing Works Count": "TC",        # Citazioni
+}
+
+# -----------------------------------------------------------------------------
+# DIZIONARIO DI MAPPING PER COCHRANE (TXT EXPORT)
+# -----------------------------------------------------------------------------
+COCHRANE_SCALAR_MAP: dict[str, str] = {
+    "TI": "TI",     # Titolo
+    "SO": "SO",     # Source / Nome Rivista
+    "YR": "PY",     # Cochrane spesso usa YR per l'anno
+    "PY": "PY",     # Alternativa per l'anno
+    "DO": "DI",     # DOI in Cochrane è DO
+    "DI": "DI",     
+    "AB": "AB",     # Abstract
+    "VL": "VL",     # Volume
+    "NO": "IS",     # Issue number in Cochrane è spesso NO o IS
+    "IS": "IS",
+    "PT": "DT",     # Publication Type
+}
+
 # Campi scalari annidati: (percorso_nested, tag_WoS)
 # Il percorso è una lista di chiavi da seguire nel dict raw.
 OPENALEX_NESTED_SCALAR_MAP: list[tuple[list[str], str]] = [
@@ -592,6 +695,284 @@ def transform_pubmed_record(raw_record: dict) -> dict:
 
     return standardized
 
+# -----------------------------------------------------------------------------
+# FUNZIONE DI TRASFORMAZIONE PER SCOPUS
+# -----------------------------------------------------------------------------
+def transform_scopus_record(raw_record: dict) -> dict:
+    """
+    Converte una riga del CSV esportato da Scopus nei tag WoS standard.
+    Scopus esporta i campi multi-valore separandoli tipicamente con una virgola
+    o un punto e virgola.
+    """
+    standardized: dict = {
+        tag: _TYPE_DEFAULTS[contract]
+        for tag, contract in COLUMN_TYPE_CONTRACTS.items()
+    }
+    
+    standardized["DB"] = "SCOPUS"
+
+    # 1. Mappatura campi scalari
+    for scopus_key, wos_tag in SCOPUS_SCALAR_MAP.items():
+        if scopus_key in raw_record and raw_record[scopus_key]:
+            standardized[wos_tag] = _cast_scalar(raw_record[scopus_key], COLUMN_TYPE_CONTRACTS[wos_tag])
+
+    # 2. Campi Multi-Valore (Split)
+    
+    # Autori (AU e AF): Scopus li fornisce come "Smith J., Doe A."
+    authors_str = str(raw_record.get("Authors", ""))
+    if authors_str and authors_str.strip() and authors_str.lower() != "[no author name available]":
+        # Split intelligente: Scopus usa spesso la virgola, ma a volte il punto e virgola.
+        separator = ";" if ";" in authors_str else ","
+        authors_list = [a.strip() for a in authors_str.split(separator) if a.strip()]
+        standardized["AU"] = authors_list
+        standardized["AF"] = authors_list # In Scopus l'export base non ha i nomi completi estesi, usiamo AU
+        
+    # Affiliazioni (C1)
+    affiliations_str = str(raw_record.get("Affiliations", ""))
+    if affiliations_str and affiliations_str.strip():
+        standardized["C1"] = [aff.strip() for aff in affiliations_str.split(";") if aff.strip()]
+
+    # Parole chiave dell'autore (DE)
+    auth_kw_str = str(raw_record.get("Author Keywords", ""))
+    if auth_kw_str and auth_kw_str.strip():
+        standardized["DE"] = [kw.strip() for kw in auth_kw_str.split(";") if kw.strip()]
+        
+    # Parole chiave di indicizzazione (ID)
+    idx_kw_str = str(raw_record.get("Index Keywords", ""))
+    if idx_kw_str and idx_kw_str.strip():
+        standardized["ID"] = [kw.strip() for kw in idx_kw_str.split(";") if kw.strip()]
+
+    # Riferimenti Citati (CR): Scopus spesso ha un lungo blocco di testo separato da ';'
+    refs_str = str(raw_record.get("References", ""))
+    if refs_str and refs_str.strip():
+        standardized["CR"] = [r.strip() for r in refs_str.split(";") if r.strip()]
+
+    # Pulizia standard su Nome Rivista (in maiuscolo come da convenzione)
+    if standardized.get("SO"):
+        standardized["SO"] = standardized["SO"].upper()
+
+    return standardized
+
+# -----------------------------------------------------------------------------
+# FUNZIONE DI TRASFORMAZIONE PER WEB OF SCIENCE (Migliorata per TXT e CSV)
+# -----------------------------------------------------------------------------
+def transform_wos_record(raw_record: dict) -> dict:
+    """
+    Converte e pulisce un record grezzo di WoS.
+    Supporta sia l'output del parser testuale (liste) sia quello CSV (stringhe piatte).
+    """
+    standardized: dict = {
+        tag: _TYPE_DEFAULTS[contract]
+        for tag, contract in COLUMN_TYPE_CONTRACTS.items()
+    }
+    
+    standardized["DB"] = "WEB_OF_SCIENCE"
+
+    # 1. Mappatura campi scalari diretti
+    for wos_key, standard_tag in WOS_SCALAR_MAP.items():
+        if wos_key in raw_record:
+            val = raw_record[wos_key]
+            
+            # Se arriva dal parser testuale, i valori singoli sono intrappolati in liste
+            if isinstance(val, list) and len(val) > 0:
+                val = val[0]
+                
+            standardized[standard_tag] = _cast_scalar(val, COLUMN_TYPE_CONTRACTS[standard_tag])
+
+    # 2. Funzione helper per estrarre liste (gestisce sia input TXT che CSV)
+    def extract_list_field(field_key: str) -> list[str]:
+        raw_val = raw_record.get(field_key, [])
+        if isinstance(raw_val, list):
+            return [str(v).strip() for v in raw_val if v]
+        elif isinstance(raw_val, str) and raw_val.strip():
+            # I CSV di WoS usano il punto e virgola come separatore
+            return [v.strip() for v in raw_val.split(";") if v.strip()]
+        return []
+
+    # 3. Campi multi-valore
+    standardized["AU"] = extract_list_field("AU")
+    standardized["AF"] = extract_list_field("AF") or standardized["AU"]
+    standardized["C1"] = extract_list_field("C1")
+    standardized["CR"] = extract_list_field("CR")
+    standardized["DE"] = extract_list_field("DE")
+    standardized["ID"] = extract_list_field("ID")
+
+    return standardized
+
+# -----------------------------------------------------------------------------
+# FUNZIONE DI TRASFORMAZIONE PER DIMENSIONS
+# -----------------------------------------------------------------------------
+def transform_dimensions_record(raw_record: dict) -> dict:
+    """
+    Converte una riga del file CSV o XLSX esportato da Dimensions 
+    nei tag WoS standard.
+    """
+    standardized: dict = {
+        tag: _TYPE_DEFAULTS[contract]
+        for tag, contract in COLUMN_TYPE_CONTRACTS.items()
+    }
+    
+    standardized["DB"] = "DIMENSIONS"
+
+    # 1. Mappatura campi scalari diretti
+    for dim_key, wos_tag in DIMENSIONS_SCALAR_MAP.items():
+        if dim_key in raw_record and raw_record[dim_key]:
+            standardized[wos_tag] = _cast_scalar(raw_record[dim_key], COLUMN_TYPE_CONTRACTS[wos_tag])
+
+    # 2. Gestione Speciale: Paginazione
+    # Dimensions spesso fornisce i numeri di pagina come "123-145"
+    pagination = str(raw_record.get("Pagination", ""))
+    if "-" in pagination:
+        parts = pagination.split("-", 1) # Splittiamo solo sul primo trattino
+        standardized["BP"] = parts[0].strip()
+        standardized["EP"] = parts[1].strip()
+
+    # 3. Campi Multi-Valore (Split)
+    
+    # Autori (AU e AF): Dimensions li separa tipicamente con il punto e virgola
+    authors_str = str(raw_record.get("Authors", ""))
+    if authors_str and authors_str.strip():
+        authors_list = [a.strip() for a in authors_str.split(";") if a.strip()]
+        standardized["AU"] = authors_list
+        standardized["AF"] = authors_list
+
+    # Affiliazioni (C1)
+    affiliations_str = str(raw_record.get("Authors Affiliations", ""))
+    if affiliations_str and affiliations_str.strip():
+        standardized["C1"] = [aff.strip() for aff in affiliations_str.split(";") if aff.strip()]
+
+    # Concepts (DE) - I concetti estratti dall'AI di Dimensions
+    concepts_str = str(raw_record.get("Concepts", ""))
+    if concepts_str and concepts_str.strip():
+        standardized["DE"] = [c.strip() for c in concepts_str.split(";") if c.strip()]
+
+    # MeSH Terms (ID) - Termini di indicizzazione medica
+    mesh_str = str(raw_record.get("MeSH terms", ""))
+    if mesh_str and mesh_str.strip():
+        standardized["ID"] = [m.strip() for m in mesh_str.split(";") if m.strip()]
+
+    # References (CR) - Dimensions di solito esporta un elenco di Reference IDs
+    refs_str = str(raw_record.get("Reference IDs", ""))
+    if refs_str and refs_str.strip():
+        # A volte usa la virgola, a volte il punto e virgola
+        separator = ";" if ";" in refs_str else ","
+        standardized["CR"] = [r.strip() for r in refs_str.split(separator) if r.strip()]
+
+    # Pulizia standard su Nome Rivista (in maiuscolo come da convenzione)
+    if standardized.get("SO"):
+        standardized["SO"] = standardized["SO"].upper()
+
+    return standardized
+
+# -----------------------------------------------------------------------------
+# FUNZIONE DI TRASFORMAZIONE PER COCHRANE
+# -----------------------------------------------------------------------------
+def transform_cochrane_record(raw_record: dict) -> dict:
+    """
+    Converte un record estratto dal file di testo Cochrane nei tag WoS standard.
+    Il parser originale 'parse_cochrane_data' concatena già i campi multipli 
+    con il punto e virgola, quindi applichiamo uno split.
+    """
+    standardized: dict = {
+        tag: _TYPE_DEFAULTS[contract]
+        for tag, contract in COLUMN_TYPE_CONTRACTS.items()
+    }
+    
+    standardized["DB"] = "COCHRANE"
+
+    # 1. Mappatura campi scalari diretti
+    for coch_key, wos_tag in COCHRANE_SCALAR_MAP.items():
+        if coch_key in raw_record and raw_record[coch_key]:
+            standardized[wos_tag] = _cast_scalar(raw_record[coch_key], COLUMN_TYPE_CONTRACTS[wos_tag])
+
+    # 2. Gestione Speciale: Paginazione
+    # In Cochrane le pagine (PG) possono essere "1-10" o singole
+    pg = str(raw_record.get("PG", ""))
+    if "-" in pg:
+        parts = pg.split("-", 1)
+        standardized["BP"] = parts[0].strip()
+        standardized["EP"] = parts[1].strip()
+    elif pg:
+        standardized["BP"] = pg.strip()
+
+    # 3. Campi Multi-Valore (Split)
+    
+    # Autori (AU e AF): Il parser li ha uniti con "; "
+    au_str = str(raw_record.get("AU", ""))
+    if au_str and au_str.strip():
+        authors_list = [a.strip() for a in au_str.split(";") if a.strip()]
+        standardized["AU"] = authors_list
+        standardized["AF"] = authors_list
+
+    # Parole chiave (KW in Cochrane diventa DE in WoS)
+    kw_str = str(raw_record.get("KW", ""))
+    if kw_str and kw_str.strip():
+        standardized["DE"] = [k.strip() for k in kw_str.split(";") if k.strip()]
+
+    # Pulizia standard su Nome Rivista
+    if standardized.get("SO"):
+        standardized["SO"] = standardized["SO"].upper()
+
+    # Nota: Cochrane raramente esporta References strutturate (CR) o Affiliazioni (C1)
+    # in un formato facilmente parsabile nel txt base. I Type Contracts 
+    # assicureranno che rimangano liste vuote [] senza causare crash.
+
+    return standardized
+
+# -----------------------------------------------------------------------------
+# FUNZIONE DI TRASFORMAZIONE PER LENS
+# -----------------------------------------------------------------------------
+def transform_lens_record(raw_record: dict) -> dict:
+    """
+    Converte una riga del file CSV esportato da Lens nei tag WoS standard.
+    Lens separa quasi esclusivamente i campi multi-valore con il punto e virgola.
+    """
+    standardized: dict = {
+        tag: _TYPE_DEFAULTS[contract]
+        for tag, contract in COLUMN_TYPE_CONTRACTS.items()
+    }
+    
+    standardized["DB"] = "LENS"
+
+    # 1. Mappatura campi scalari diretti
+    for lens_key, wos_tag in LENS_SCALAR_MAP.items():
+        if lens_key in raw_record and raw_record[lens_key]:
+            standardized[wos_tag] = _cast_scalar(raw_record[lens_key], COLUMN_TYPE_CONTRACTS[wos_tag])
+
+    # 2. Campi Multi-Valore (Split)
+    
+    # Autori (AU e AF): Lens li esporta nella colonna "Author/s" separati da ';'
+    authors_str = str(raw_record.get("Author/s", ""))
+    if authors_str and authors_str.strip():
+        authors_list = [a.strip() for a in authors_str.split(";") if a.strip()]
+        standardized["AU"] = authors_list
+        standardized["AF"] = authors_list
+
+    # Parole Chiave Autore (DE): Lens usa "Keywords"
+    kw_str = str(raw_record.get("Keywords", ""))
+    if kw_str and kw_str.strip():
+        standardized["DE"] = [k.strip() for k in kw_str.split(";") if k.strip()]
+
+    # Index Keywords (ID): Lens usa "Fields of Study" (basato su concetti AI come Dimensions)
+    fos_str = str(raw_record.get("Fields of Study", ""))
+    if fos_str and fos_str.strip():
+        standardized["ID"] = [f.strip() for f in fos_str.split(";") if f.strip()]
+
+    # Riferimenti Citati (CR): Lens usa "References" o "Lens ID delle referenze"
+    refs_str = str(raw_record.get("References", ""))
+    if refs_str and refs_str.strip():
+        standardized["CR"] = [r.strip() for r in refs_str.split(";") if r.strip()]
+
+    # Affiliazioni (C1): Spesso esportate come "Affiliations" in Lens
+    aff_str = str(raw_record.get("Affiliations", ""))
+    if aff_str and aff_str.strip():
+        standardized["C1"] = [aff.strip() for aff in aff_str.split(";") if aff.strip()]
+
+    # Pulizia standard su Nome Rivista (in maiuscolo come da convenzione)
+    if standardized.get("SO"):
+        standardized["SO"] = standardized["SO"].upper()
+
+    return standardized
 
 # -----------------------------------------------------------------------------
 # 8.  DISPATCHER  (estensibilità multi-sorgente)
@@ -609,6 +990,7 @@ _TRANSFORM_DISPATCHER: dict[str, Any] = {
     "OPENALEX":       transform_openalex_record,
     "OPENALEX_CSV":   transform_openalex_csv_record,
     "DIMENSIONS":     transform_dimensions_record,
+    "COCHRANE":       transform_cochrane_record,
     "LENS":           transform_lens_record,
 }
 
@@ -789,8 +1171,10 @@ def convert2df(
     # Garantiamo che tutte le colonne del glossario siano presenti
     for col in column_order:
         if col not in df.columns:
-            default_val = _TYPE_DEFAULTS[COLUMN_TYPE_CONTRACTS[col]]
-            df[col] = default_val
+            if for_csv_export:
+                df[col] = ""  # Se è per CSV, tutto deve essere testo vuoto
+            else:
+                df[col] = _TYPE_DEFAULTS[COLUMN_TYPE_CONTRACTS[col]]
 
     # =========================================================================
     # FASE 4: CALCULATED FIELDS (SR) - Applicazione sul DataFrame

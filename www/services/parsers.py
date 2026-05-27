@@ -133,8 +133,53 @@ def parse_cochrane_data(datapath):
 
     return data
 
+#### FUNZIONI DEFINITE DA NOI
 
+def parse_pubmed_medline_text(text: str) -> list[dict]:
+    """
+    Legge un blocco di testo in formato MEDLINE (PubMed) e lo converte
+    in una lista di dizionari. Gestisce i campi ripetuti (es. multipli 'AU')
+    creando automaticamente delle liste.
+    """
+    records = []
+    current_record = {}
+    current_key = None
 
+    for line in text.splitlines():
+        # Ignora righe vuote
+        if not line.strip():
+            continue
 
+        # Ogni nuovo record PubMed inizia col tag PMID
+        if line.startswith("PMID-"):
+            if current_record:
+                records.append(current_record)
+            current_record = {}
 
-#parser
+        # Identifica un nuovo tag (es. "TI  - ") - Il tag occupa i primi 4 caratteri
+        if len(line) > 6 and line[4:6] == "- ":
+            current_key = line[:4].strip()
+            value = line[6:].strip()
+
+            if current_key in current_record:
+                # Se la chiave esiste già (es. un secondo autore "AU"), trasformala in lista
+                if isinstance(current_record[current_key], list):
+                    current_record[current_key].append(value)
+                else:
+                    current_record[current_key] = [current_record[current_key], value]
+            else:
+                # Altrimenti salva il valore scalare
+                current_record[current_key] = value
+
+        # Se non c'è un tag, è la continuazione della riga precedente (es. un Abstract lungo)
+        elif current_key and line.startswith("      "):
+            if isinstance(current_record[current_key], list):
+                current_record[current_key][-1] += " " + line.strip()
+            else:
+                current_record[current_key] += " " + line.strip()
+
+    # Aggiungi l'ultimo record
+    if current_record:
+        records.append(current_record)
+
+    return records

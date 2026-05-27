@@ -81,6 +81,23 @@ COLUMN_TYPE_CONTRACTS: dict[str, type] = {
     "ID":   list,
 }
 
+# -----------------------------------------------------------------------------
+# DIZIONARIO DI MAPPING PER PUBMED (MEDLINE FORMAT)
+# -----------------------------------------------------------------------------
+PUBMED_SCALAR_MAP: dict[str, str] = {
+    "PMID": "UT",   # Identificatore Univoco
+    "LID":  "DI",   # Location ID (Spesso contiene il DOI)
+    "TI":   "TI",   # Titolo
+    "JT":   "SO",   # Journal Title (Nome della rivista)
+    "TA":   "JI",   # Journal Title Abbreviation
+    "PT":   "DT",   # Publication Type
+    "LA":   "LA",   # Language
+    "AB":   "AB",   # Abstract
+    "VI":   "VL",   # Volume
+    "IP":   "IS",   # Issue
+    "PG":   "BP",   # Paginazione (richiederà uno split per BP e EP)
+}
+
 # Valore di default per ogni tipo (usato in caso di campo mancante/None)
 _TYPE_DEFAULTS: dict[type, Any] = {
     str:  "",
@@ -450,6 +467,69 @@ def transform_openalex_record(raw_record: dict) -> dict:
 
     return standardized
 
+# -----------------------------------------------------------------------------
+# FUNZIONE DI TRASFORMAZIONE PER PUBMED
+# -----------------------------------------------------------------------------
+def transform_pubmed_record(raw_record: dict) -> dict:
+    """
+    Converte un record estratto dal formato MEDLINE nei tag WoS standard.
+    """
+    standardized: dict = {
+        tag: _TYPE_DEFAULTS[contract]
+        for tag, contract in COLUMN_TYPE_CONTRACTS.items()
+    }
+    
+    standardized["DB"] = "PUBMED"
+    standardized["PMID"] = raw_record.get("PMID", "")
+
+    # Mappatura campi scalari diretti
+    for medline_key, wos_tag in PUBMED_SCALAR_MAP.items():
+        val = raw_record.get(medline_key)
+        # Alcuni campi scalari in Medline potrebbero essere stati parsati come list 
+        # se presenti più volte per errore, forziamo l'uso del primo elemento
+        if isinstance(val, list):
+            val = val[0]
+        standardized[wos_tag] = _cast_scalar(val, COLUMN_TYPE_CONTRACTS[wos_tag])
+
+    # --- Estrazioni Specifiche per PubMed ---
+
+    # Anno di pubblicazione (DP in Medline è solitamente "2024 Oct 15", prendiamo le prime 4 cifre)
+    dp = raw_record.get("DP", "")
+    if dp and len(dp) >= 4:
+        standardized["PY"] = dp[:4]
+
+    # DOI (LID in Medline contiene spesso "10.xxx [doi]", dobbiamo pulirlo)
+    lid = raw_record.get("LID", "")
+    if "[doi]" in str(lid):
+        standardized["DI"] = str(lid).split("[doi]")[0].strip()
+
+    # Pagine (PG in Medline è spesso "123-145")
+    pg = raw_record.get("PG", "")
+    if "-" in pg:
+        parts = pg.split("-")
+        standardized["BP"] = parts[0].strip()
+        standardized["EP"] = parts[1].strip()
+    else:
+        standardized["BP"] = pg
+
+    # Autori (AU). In Medline sono già nel formato "Cognome Iniziali" (es. "Smith J")
+    au = raw_record.get("AU", [])
+    standardized["AU"] = au if isinstance(au, list) else [au]
+    
+    # Autori Completi (FAU)
+    fau = raw_record.get("FAU", [])
+    standardized["AF"] = fau if isinstance(fau, list) else [fau]
+
+    # Affiliazioni (AD)
+    ad = raw_record.get("AD", [])
+    standardized["C1"] = ad if isinstance(ad, list) else [ad]
+
+    # Parole Chiave (OT - Other Term)
+    ot = raw_record.get("OT", [])
+    standardized["DE"] = ot if isinstance(ot, list) else [ot]
+
+    return standardized
+
 
 # -----------------------------------------------------------------------------
 # 8.  DISPATCHER  (estensibilità multi-sorgente)
@@ -463,7 +543,7 @@ def transform_openalex_record(raw_record: dict) -> dict:
 _TRANSFORM_DISPATCHER: dict[str, Any] = {
     "OPENALEX": transform_openalex_record,
     # "SCOPUS":   transform_scopus_record,    # da implementare
-    # "PUBMED":   transform_pubmed_record,    # da implementare
+    "PUBMED":   transform_pubmed_record    # da implementare
     # "DIMENSIONS": transform_dimensions_record,
 }
 
@@ -657,11 +737,14 @@ def convert2df(
     except ImportError:
         print("[WARN] Funzione SR non trovata in www.services.metatagextraction. Applicazione fallback.")
         if not df.empty:
+            # Fallback avanzato: gestisce sia le liste (memoria) sia le stringhe serializzate per CSV
             first_author = df["AU"].apply(
-                lambda x: str(x[0]).split(",")[0].strip() if isinstance(x, list) and len(x) > 0 else "Unknown"
+                lambda x: x[0].split(",")[0].strip() if isinstance(x, list) and len(x) > 0 
+                else (str(x).split(";")[0].split(",")[0].strip() if isinstance(x, str) and str(x).strip() else "Unknown")
             )
             df["SR"] = first_author + ", " + df["PY"].astype(str) + ", " + df["SO"].astype(str)
             df["SR"] = df["SR"].str.strip(", ")
 
     # Restituiamo il DataFrame ordinato secondo il glossario
     return df[column_order]
+

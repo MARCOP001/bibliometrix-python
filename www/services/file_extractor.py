@@ -1,6 +1,5 @@
 import pandas as pd
 import os
-import re
 
 # Importiamo i parser per i file di testo proprietari
 from .parsers import parse_pubmed_medline_text, parse_wos_data, parse_cochrane_data
@@ -8,10 +7,10 @@ from .parsers import parse_pubmed_medline_text, parse_wos_data, parse_cochrane_d
 def extract_from_file(file_path: str, source: str) -> list[dict]:
     """
     Fase 1 (Extract) - Base Level.
-    Legge un file grezzo esportato manualmente dalle sei principali piattaforme 
+    Legge un file grezzo esportato manualmente dalle principali piattaforme 
     bibliometriche e lo converte in una lista di dizionari (raw_records).
     
-    Supporta: WEB_OF_SCIENCE, SCOPUS, PUBMED, OPENALEX, DIMENSIONS, LENS.
+    Supporta: WEB_OF_SCIENCE, SCOPUS, PUBMED, OPENALEX, DIMENSIONS, LENS, COCHRANE.
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Errore: Il file '{file_path}' non esiste.")
@@ -31,14 +30,14 @@ def extract_from_file(file_path: str, source: str) -> list[dict]:
             return parse_pubmed_medline_text(text_content)
             
         elif source_upper == "WEB_OF_SCIENCE":
-            # Usiamo la funzione del pacchetto originale
             return parse_wos_data(file_path)
+            
         elif source_upper == "COCHRANE":
             return parse_cochrane_data(file_path)
             
         else:
             raise ValueError(
-                f"I file di testo (.txt/.ciw) sono supportati solo per PUBMED e WEB_OF_SCIENCE. "
+                f"I file di testo (.txt/.ciw) sono supportati solo per PUBMED, WEB_OF_SCIENCE e COCHRANE. "
                 f"Ricevuto: {source_upper}"
             )
 
@@ -51,17 +50,15 @@ def extract_from_file(file_path: str, source: str) -> list[dict]:
         
         try:
             if file_extension == '.csv':
-                # Leggiamo tutto come stringa per evitare troncamenti di ID o anni
                 df = pd.read_csv(
                     file_path, 
                     dtype=str, 
                     on_bad_lines='skip',
-                    encoding='utf-8' # Standard per l'export di questi database
+                    encoding='utf-8' 
                 )
             else:
                 df = pd.read_excel(file_path, dtype=str)
                 
-            # Riempiamo i NaN per evitare problemi di iterazione nello standardizer
             df = df.fillna("")
             return df.to_dict(orient="records")
             

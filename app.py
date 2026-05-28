@@ -962,7 +962,6 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         source_mapped = "OPENALEX" if source == "openalex" else "PUBMED"
                         standardized_df = convert2df(raw_records, source=source_mapped, validate=True)
                         
-                        # ---> AGGIUNGI QUESTE 3 RIGHE QUI <---
                         # Prepara il dato per i calcoli temporali della UI
                         standardized_df["PY"] = pd.to_numeric(standardized_df["PY"], errors="coerce")
                         standardized_df = standardized_df.dropna(subset=["PY"])

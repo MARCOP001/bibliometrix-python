@@ -1,44 +1,43 @@
 # =============================================================================
-# standardizer.py  —  Phase 2: TRANSFORM – RENAME (The Lookup Strategy)
+# standardizer.py  —  Fase 2: TRASFORMAZIONE (La Strategia del Traduttore)
 # =============================================================================
 #
-# Module Overview
+# Panoramica del Modulo
 # ---------------
-# This module constitutes the entirety of Phase 2 (Transform) of the
-# source-agnostic bibliometric ETL pipeline. Its sole responsibility is to
-# accept raw, heterogeneous records from any supported bibliographic database
-# and produce a uniform, validated dictionary whose keys strictly conform to
-# the Web of Science (WoS).
+# Questo modulo costituisce l'intera Fase 2 (Transform) della pipeline ETL 
+# universale per i dati bibliometrici. Il suo unico scopo è ricevere record 
+# grezzi, disomogenei e caotici da qualsiasi database supportato, per produrre 
+# un dizionario uniforme e validato. Le chiavi di questo dizionario rispetteranno 
+# rigorosamente lo standard di Web of Science (WoS).
 #
-# The module is structured around three interconnected architectural pillars:
+# Il modulo si regge su tre pilastri architettonici interconnessi:
 #
-#   1. **Mapping Dictionaries (Lookup Strategy):** Per-source dictionaries
-#      decouple proprietary field names from WoS standard tags. This replaces
-#      brittle if/elif chains with pure data, respecting the Single
-#      Responsibility Principle — the logic that processes a field never needs
-#      to know the field's source-specific name.
+#   1. **I Dizionari di Traduzione (Lookup Strategy):** Dizionari dedicati per 
+#      ogni sorgente che scollegano i nomi proprietari dai tag standard WoS. 
+#      Questo elimina le fragili catene di "if/elif", rispettando il Principio 
+#      di Singola Responsabilità: il codice che processa un campo non ha bisogno 
+#      di sapere come quel campo si chiamava all'origine.
 #
-#   2. **Type Contracts & Null Handling:** `COLUMN_TYPE_CONTRACTS` defines the
-#      expected Python type for every output column. `_cast_scalar` and
-#      `_get_default_value` enforce these contracts at transformation time,
-#      guaranteeing that downstream analytical code never encounters
-#      unexpected `None`, `NaN`, or mixed-type columns.
+#   2. **I Contratti di Tipo (Type Contracts) e Gestione dei Vuoti:** #      `COLUMN_TYPE_CONTRACTS` definisce il tipo Python obbligatorio per ogni 
+#      colonna. Le funzioni `_cast_scalar` e `_get_default_value` applicano 
+#      questa "legge" durante la trasformazione, garantendo che le funzioni di 
+#      analisi successive non incontrino MAI valori `None`, `NaN` o tipi misti.
 #
-#   3. **Transform Dispatcher:** `_TRANSFORM_DISPATCHER` implements a
-#      variation of the Strategy / Registry pattern, mapping each source
-#      identifier to its dedicated transformation function. This makes the
-#      system Open/Closed: adding support for a new database requires adding
-#      one dictionary entry and one function, with zero modifications to the
-#      main `convert2df` entry point.
+#   3. **Il "Vigile Urbano" (Transform Dispatcher):** `_TRANSFORM_DISPATCHER` 
+#      implementa il pattern Strategy/Registry. Associa il nome di ogni database 
+#      alla sua funzione di trasformazione dedicata. Questo rende il sistema 
+#      Open/Closed: per aggiungere un nuovo database, basta aggiungere una voce 
+#      al dizionario e una singola funzione, senza toccare il punto di ingresso 
+#      principale (`convert2df`).
 #
-# Responsibilities of this module:
-#   1. Map proprietary source field names to standard WoS tags.
-#   2. Enforce type contracts (type contracts) on every column.
-#   3. Handle missing values (None / NaN → "" or [] or 0).
-#   4. Extract complex fields (authors, affiliations, keywords, references).
-#   5. Compute derived fields (SR – Short Reference).
-#   6. Validate the final record before export.
-#   7. Expose a single public entry-point: convert2df().
+# I 7 compiti di questo modulo:
+#   1. Mappare i nomi proprietari nei tag standard WoS.
+#   2. Imporre i Contratti di Tipo su ogni singola colonna.
+#   3. Gestire i dati mancanti (None / NaN diventano "" o [] o 0).
+#   4. Estrarre e pulire i campi complessi (autori, affiliazioni, parole chiave).
+#   5. Calcolare i campi derivati (come la Short Reference - SR).
+#   6. Validare il record finale prima dell'esportazione.
+#   7. Esporre un unico punto di accesso pubblico per tutto: convert2df().
 # =============================================================================
 
 from __future__ import annotations
@@ -47,85 +46,77 @@ import pandas as pd
 from typing import Any
 
 # -----------------------------------------------------------------------------
-# 1.  MAPPING DICTIONARIES  (Lookup Strategy)
+# 1.  I DIZIONARI DI TRADUZIONE  (Lookup Strategy)
 # -----------------------------------------------------------------------------
-# Each source database has its own dedicated mapping dictionary that translates
-# its proprietary field names (keys) into the corresponding WoS standard tags
-# (values). This architecture implements the **Lookup Strategy** pattern:
-# instead of encoding source-specific knowledge into conditional logic (e.g.,
-# `if source == "SCOPUS": field = record["Title"]`), the mapping is expressed
-# as pure, declarative data. The transformation functions remain completely
-# source-agnostic — they iterate over a dictionary, never branching on a
-# source name. This strictly adheres to the Single Responsibility Principle:
-# each mapping dictionary is the single authoritative definition of how one
-# database's schema relates to the WoS standard, and it can be updated,
-# reviewed, or extended without touching any procedural code.
+# Ogni database ha il suo "dizionario bilingue" che traduce i suoi campi 
+# proprietari (le chiavi) nei tag standard di WoS (i valori).
+# Questa architettura usa i dati puri invece della logica condizionale (cioè 
+# niente `if source == "SCOPUS": field = "Title"`). In questo modo, le funzioni 
+# di trasformazione non devono mai preoccuparsi di quale database stiano leggendo.
+# Se in futuro Scopus cambia il nome di una colonna, basterà aggiornare solo 
+# questo dizionario, senza toccare una riga di codice funzionale.
 
-# Direct scalar fields (string or integer) sourced from the top-level of an
-# OpenAlex JSON API record.
+# Campi semplici (testi o numeri) estratti dal primo livello di un record JSON di OpenAlex.
 OPENALEX_SCALAR_MAP: dict[str, str] = {
-    "id":               "UT",   # Unique article identifier
-    "doi":              "DI",   # Digital Object Identifier
-    "title":            "TI",   # Document title
-    "publication_year": "PY",   # 4-digit publication year (int in API, cast to str)
-    "cited_by_count":   "TC",   # Total citation count (int)
-    "language":         "LA",   # Document language (ISO 639-1 code)
-    "type":             "DT",   # Document type (Article, Review, etc.)
+    "id":               "UT",   # Identificatore unico dell'articolo
+    "doi":              "DI",   # DOI (Digital Object Identifier)
+    "title":            "TI",   # Titolo del documento
+    "publication_year": "PY",   # Anno (numero nell'API, ma convertito in testo)
+    "cited_by_count":   "TC",   # Numero totale di citazioni (intero)
+    "language":         "LA",   # Lingua del documento (codice ISO 639-1)
+    "type":             "DT",   # Tipo di documento (Article, Review, ecc.)
 }
 
 # -----------------------------------------------------------------------------
-# MAPPING DICTIONARY FOR OPENALEX (CSV VARIANT)
+# DIZIONARIO PER OPENALEX (VARIANTE CSV)
 # -----------------------------------------------------------------------------
-# OpenAlex can be consumed either through its REST API (JSON payloads) or via
-# bulk CSV exports. The CSV format uses a flat, denormalized schema that differs
-# significantly from the nested JSON structure. A separate mapping dictionary
-# is therefore necessary to handle this format variant without polluting the
-# JSON transformer with format-detection logic.
+# L'esportazione in CSV di OpenAlex è completamente piatta e diversa dal JSON 
+# nidificato delle API. Questo dizionario separato permette di gestire la 
+# variante CSV senza sporcare il codice che gestisce il formato JSON.
 OPENALEX_CSV_SCALAR_MAP: dict[str, str] = {
-    "id": "UT",                       # Unique identifier
+    "id": "UT",                       # Identificatore unico
     "doi": "DI",                      # DOI
-    "title": "TI",                    # Document title
-    "publication_year": "PY",         # Publication year
-    "type": "DT",                     # Document type
-    "cited_by_count": "TC",           # Citation count
-    "host_venue": "SO",               # Journal name (CSV variant A)
-    "source_display_name": "SO"       # Journal name (CSV variant B) — both included for robustness
+    "title": "TI",                    # Titolo del documento
+    "publication_year": "PY",         # Anno di pubblicazione
+    "type": "DT",                     # Tipo di documento
+    "cited_by_count": "TC",           # Numero di citazioni
+    "host_venue": "SO",               # Nome della rivista (Vecchia variante CSV)
+    "source_display_name": "SO"       # Nome della rivista (Nuova variante CSV) — li includiamo entrambi per sicurezza
 }
 
 # -----------------------------------------------------------------------------
-# MAPPING DICTIONARY FOR SCOPUS (CSV EXPORT)
+# DIZIONARIO PER SCOPUS (ESPORTAZIONE CSV)
 # -----------------------------------------------------------------------------
 SCOPUS_SCALAR_MAP: dict[str, str] = {
-    "EID": "UT",                           # Scopus unique identifier (Electronic ID)
+    "EID": "UT",                           # ID Elettronico unico di Scopus
     "DOI": "DI",                           # DOI
-    "Title": "TI",                         # Document title
-    "Source title": "SO",                  # Journal / source name
-    "Abbreviated Source Title": "JI",      # ISO journal abbreviation
-    "Year": "PY",                          # Publication year
-    "Document Type": "DT",                 # Document type
-    "Cited by": "TC",                      # Citation count
+    "Title": "TI",                         # Titolo
+    "Source title": "SO",                  # Nome della rivista / fonte
+    "Abbreviated Source Title": "JI",      # Abbreviazione ufficiale della rivista
+    "Year": "PY",                          # Anno
+    "Document Type": "DT",                 # Tipo di documento
+    "Cited by": "TC",                      # Citazioni ricevute
     "Abstract": "AB",                      # Abstract
-    "Volume": "VL",                        # Volume number
-    "Issue": "IS",                         # Issue number
-    "Page start": "BP",                    # First page (Begin Page)
-    "Page end": "EP",                      # Last page (End Page)
-    "PubMed ID": "PMID",                   # PubMed identifier (when available)
-    "Language of Original Document": "LA", # Document language
-    "Correspondence Address": "RP",        # Reprint / corresponding author address
+    "Volume": "VL",                        # Volume
+    "Issue": "IS",                         # Numero (Fascicolo)
+    "Page start": "BP",                    # Pagina iniziale
+    "Page end": "EP",                      # Pagina finale
+    "PubMed ID": "PMID",                   # ID di PubMed (se presente)
+    "Language of Original Document": "LA", # Lingua originale
+    "Correspondence Address": "RP",        # Indirizzo per i contatti
 }
 
 # -----------------------------------------------------------------------------
-# MAPPING DICTIONARY FOR WEB OF SCIENCE
+# DIZIONARIO PER WEB OF SCIENCE
 # -----------------------------------------------------------------------------
-# WoS natively uses WoS tags as column headers. However, passing its records
-# through the same mapping infrastructure as all other sources serves two
-# purposes: (a) it guarantees that type contracts are uniformly enforced
-# regardless of source, and (b) it handles known edge cases such as the dual
-# citation-count field names (TC vs Z9) within different WoS export profiles.
+# WoS usa già nativamente i suoi tag. Tuttavia, far passare i suoi dati 
+# attraverso questo dizionario garantisce che i Contratti di Tipo vengano 
+# applicati in modo uniforme, e risolve casi ambigui (es. le citazioni a volte 
+# si chiamano TC, a volte Z9 a seconda del formato di esportazione).
 WOS_SCALAR_MAP: dict[str, str] = {
     "UT": "UT",
     "DI": "DI",
-    "PM": "PMID",  # In some WoS export profiles PubMed ID appears under "PM"
+    "PM": "PMID",  # In alcune esportazioni, l'ID PubMed si chiama "PM"
     "TI": "TI",
     "SO": "SO",
     "JI": "JI",
@@ -138,145 +129,141 @@ WOS_SCALAR_MAP: dict[str, str] = {
     "IS": "IS",
     "BP": "BP",
     "EP": "EP",
-    "TC": "TC", # Primary citation count field in WoS exports
-    "Z9": "TC"  # Alternative citation count field in certain WoS export formats
+    "TC": "TC", # Colonna classica per le citazioni in WoS
+    "Z9": "TC"  # Colonna alternativa per le citazioni in alcuni formati WoS
 }
 
 # -----------------------------------------------------------------------------
-# MAPPING DICTIONARY FOR DIMENSIONS (CSV / XLSX EXPORT)
+# DIZIONARIO PER DIMENSIONS (ESPORTAZIONE CSV / EXCEL)
 # -----------------------------------------------------------------------------
 DIMENSIONS_SCALAR_MAP: dict[str, str] = {
-    "Publication ID": "UT",            # Dimensions unique identifier
+    "Publication ID": "UT",            # ID unico di Dimensions
     "DOI": "DI",                       # DOI
-    "PMID": "PMID",                    # PubMed identifier
-    "Title": "TI",                     # Document title
-    "Source title": "SO",              # Journal or venue name
-    "PubYear": "PY",                   # Publication year
-    "Publication Type": "DT",          # Document type
-    "Times cited": "TC",               # Citation count
+    "PMID": "PMID",                    # ID PubMed
+    "Title": "TI",                     # Titolo
+    "Source title": "SO",              # Nome rivista
+    "PubYear": "PY",                   # Anno
+    "Publication Type": "DT",          # Tipo di documento
+    "Times cited": "TC",               # Citazioni
     "Abstract": "AB",                  # Abstract
-    "Volume": "VL",                    # Volume number
-    "Issue": "IS",                     # Issue number
-    # The "Pagination" column is initially mapped to BP as a placeholder;
-    # the transformer later splits it into BP (start) and EP (end) pages.
+    "Volume": "VL",                    # Volume
+    "Issue": "IS",                     # Fascicolo
+    # La colonna "Pagination" viene mappata su BP provvisoriamente;
+    # la funzione di trasformazione poi la dividerà in BP (inizio) ed EP (fine).
     "Pagination": "BP",
 }
 
 # -----------------------------------------------------------------------------
-# MAPPING DICTIONARY FOR LENS (CSV EXPORT)
+# DIZIONARIO PER LENS.ORG (ESPORTAZIONE CSV)
 # -----------------------------------------------------------------------------
 LENS_SCALAR_MAP: dict[str, str] = {
-    "Lens ID": "UT",                   # Lens unique identifier
+    "Lens ID": "UT",                   # ID unico di Lens
     "DOI": "DI",                       # DOI
-    "PMID": "PMID",                    # PubMed identifier
-    "Title": "TI",                     # Document title
-    "Publication Year": "PY",          # Publication year
-    "Publication Type": "DT",          # Document type
-    "Source Title": "SO",              # Journal or source name
-    "Volume": "VL",                    # Volume number
-    "Issue": "IS",                     # Issue number
-    "Start Page": "BP",                # First page
-    "End Page": "EP",                  # Last page
+    "PMID": "PMID",                    # ID PubMed
+    "Title": "TI",                     # Titolo
+    "Publication Year": "PY",          # Anno
+    "Publication Type": "DT",          # Tipo di documento
+    "Source Title": "SO",              # Nome rivista
+    "Volume": "VL",                    # Volume
+    "Issue": "IS",                     # Fascicolo
+    "Start Page": "BP",                # Pagina inizio
+    "End Page": "EP",                  # Pagina fine
     "Abstract": "AB",                  # Abstract
-    "Citing Works Count": "TC",        # Citation count
+    "Citing Works Count": "TC",        # Citazioni
 }
 
 # -----------------------------------------------------------------------------
-# MAPPING DICTIONARY FOR COCHRANE (TXT EXPORT)
+# DIZIONARIO PER COCHRANE (ESPORTAZIONE TESTO)
 # -----------------------------------------------------------------------------
 COCHRANE_SCALAR_MAP: dict[str, str] = {
-    "TI": "TI",     # Title
-    "SO": "SO",     # Source / journal name
-    "YR": "PY",     # Year — Cochrane's primary year field is often "YR"
-    "PY": "PY",     # Year — alternative field name for robustness
-    "DO": "DI",     # DOI — Cochrane uses "DO" instead of the standard "DI"
-    "DI": "DI",     # DOI — alternative field name for robustness
+    "TI": "TI",     # Titolo
+    "SO": "SO",     # Nome rivista
+    "YR": "PY",     # Cochrane usa spesso YR al posto di PY per l'anno
+    "PY": "PY",     # Inserito per robustezza se usassero il tag standard
+    "DO": "DI",     # Cochrane usa DO al posto di DI per il DOI
+    "DI": "DI",     
     "AB": "AB",     # Abstract
     "VL": "VL",     # Volume
-    "NO": "IS",     # Issue number — Cochrane's field is often "NO"
-    "IS": "IS",     # Issue number — alternative field name for robustness
-    "PT": "DT",     # Publication type
+    "NO": "IS",     # Cochrane usa spesso NO al posto di IS per il numero
+    "IS": "IS",     
+    "PT": "DT",     # Tipo di pubblicazione
 }
 
-# Nested scalar fields for the OpenAlex JSON format: each entry specifies a
-# traversal path through the nested JSON structure and the WoS tag to which
-# the resolved value should be assigned. This list-of-tuples structure enables
-# the `clean_scalar_fields` function to handle arbitrarily deep nesting in a
-# single, uniform loop, rather than requiring bespoke access code per field.
+# Mappa delle "Scatole Cinesi" per OpenAlex (JSON API).
+# Invece di avere i dati in superficie, l'API nasconde informazioni importanti 
+# dentro sotto-dizionari. Questa lista di percorsi (path) dice all'Esploratore 
+# Sicuro (`_get_nested`) esattamente dove andare a pescare il dato.
 OPENALEX_NESTED_SCALAR_MAP: list[tuple[list[str], str]] = [
-    (["primary_location", "source", "display_name"],    "SO"),  # Journal display name
-    (["primary_location", "source", "abbreviated_title"],"JI"),  # ISO journal abbreviation
-    (["biblio", "volume"],                               "VL"),  # Volume number
-    (["biblio", "issue"],                                "IS"),  # Issue number
-    (["biblio", "first_page"],                           "BP"),  # First page
-    (["biblio", "last_page"],                            "EP"),  # Last page
-    (["ids", "pmid"],                                    "PMID"),# PubMed identifier
+    (["primary_location", "source", "display_name"],    "SO"),  # Nome esteso rivista
+    (["primary_location", "source", "abbreviated_title"],"JI"),  # Nome abbreviato rivista
+    (["biblio", "volume"],                               "VL"),  # Volume
+    (["biblio", "issue"],                                "IS"),  # Fascicolo
+    (["biblio", "first_page"],                           "BP"),  # Pagina iniziale
+    (["biblio", "last_page"],                            "EP"),  # Pagina finale
+    (["ids", "pmid"],                                    "PMID"),# ID PubMed
 ]
 
 # -----------------------------------------------------------------------------
-# 2.  TYPE CONTRACTS  (Data Integrity)
+# 2.  I CONTRATTI DI TIPO  (Integrità dei Dati)
 # -----------------------------------------------------------------------------
-# This dictionary is the central schema definition of the pipeline's output.
-# It maps every WoS output tag to the single Python type that is permissible
-# for that column. Enforcing these contracts at transformation time — rather
-# than at analysis time — is a fundamental Data Integrity principle: it
-# prevents invalid states from ever entering the system, instead of requiring
-# defensive checks to be scattered throughout all downstream consumers.
-#
-# Concretely, this prevents a class of runtime errors common in bibliometric
-# pipelines: a column expected to hold integers (e.g., TC) receiving a mix of
-# integers and `None` values, which would silently break arithmetic operations
-# such as citation count rankings or correlation analyses.
+# Questa è la "Legge" fondamentale della nostra pipeline.
+# Associa ogni tag WoS all'unico tipo Python ammissibile per quella colonna.
+# Imporre queste regole all'ingresso previene i classici crash bibliometrici: 
+# se una funzione di calcolo si aspetta dei numeri (es. le Citazioni TC) e trova 
+# dei testi o dei valori nulli, il sistema crolla. Con questi contratti, i 
+# dati errati non entrano MAI nel sistema.
 
 COLUMN_TYPE_CONTRACTS: dict[str, type] = {
-    # String scalar fields — bibliographic metadata
-    "DB":   str,   # Source database identifier
-    "UT":   str,   # Unique record identifier
+    # Testi (Stringhe) — Metadati bibliografici di base
+    "DB":   str,   # Nome del Database di origine
+    "UT":   str,   # ID Unico del record
     "DI":   str,   # DOI
-    "PMID": str,   # PubMed identifier
-    "TI":   str,   # Title
-    "SO":   str,   # Source (journal) name
-    "JI":   str,   # ISO journal abbreviation
-    "PY":   str,   # Publication year (stored as 4-char string for consistency)
-    "DT":   str,   # Document type
-    "LA":   str,   # Language
-    "RP":   str,   # Reprint address
+    "PMID": str,   # ID PubMed
+    "TI":   str,   # Titolo
+    "SO":   str,   # Nome della Rivista (Source)
+    "JI":   str,   # Abbreviazione ufficiale della rivista
+    "PY":   str,   # Anno (Forzato a testo di 4 caratteri per coerenza)
+    "DT":   str,   # Tipo di documento
+    "LA":   str,   # Lingua
+    "RP":   str,   # Indirizzo per contatti (Reprint)
     "AB":   str,   # Abstract
     "VL":   str,   # Volume
-    "IS":   str,   # Issue
-    "BP":   str,   # Begin page
-    "EP":   str,   # End page
-    "SR":   str,   # Short Reference (derived / computed field)
-    # Integer scalar field
-    "TC":   int,   # Total citation count
-    # Multi-value list fields — require special handling during serialization
-    "AU":   list,  # Authors (WoS format: "Surname, Firstname")
-    "AF":   list,  # Authors full names
-    "C1":   list,  # Institutional affiliations
-    "CR":   list,  # Cited references
-    "DE":   list,  # Author keywords
-    "ID":   list,  # Index keywords / Keywords Plus
+    "IS":   str,   # Fascicolo (Issue)
+    "BP":   str,   # Pagina iniziale
+    "EP":   str,   # Pagina finale
+    "SR":   str,   # Short Reference (Campo calcolato dal sistema)
+    
+    # Numeri interi
+    "TC":   int,   # Totale delle citazioni ricevute
+    
+    # Liste — Campi complessi (Da gestire con cura in fase di esportazione)
+    "AU":   list,  # Autori (Formato obbligatorio: "Cognome, Nome")
+    "AF":   list,  # Nomi completi degli autori
+    "C1":   list,  # Università e affiliazioni
+    "CR":   list,  # Bibliografia (Citazioni in uscita)
+    "DE":   list,  # Parole chiave scelte dagli autori
+    "ID":   list,  # Parole chiave assegnate dal database (Keywords Plus)
 }
 
 # -----------------------------------------------------------------------------
-# MAPPING DICTIONARY FOR PUBMED (MEDLINE FORMAT)
+# DIZIONARIO PER PUBMED (FORMATO MEDLINE)
 # -----------------------------------------------------------------------------
 PUBMED_SCALAR_MAP: dict[str, str] = {
-    "PMID": "UT",   # PubMed unique identifier doubles as the record UT
-    "LID":  "DI",   # Location ID — in MEDLINE this often carries the DOI
-    "TI":   "TI",   # Title
-    "JT":   "SO",   # Full journal title
-    "TA":   "JI",   # Journal title abbreviation
-    "PT":   "DT",   # Publication type
-    "LA":   "LA",   # Language
+    "PMID": "UT",   # In PubMed l'ID unico funge direttamente da UT
+    "LID":  "DI",   # Location ID — in Medline spesso contiene il DOI nascosto
+    "TI":   "TI",   # Titolo
+    "JT":   "SO",   # Titolo esteso della rivista
+    "TA":   "JI",   # Titolo abbreviato
+    "PT":   "DT",   # Tipo di pubblicazione
+    "LA":   "LA",   # Lingua
     "AB":   "AB",   # Abstract
     "VI":   "VL",   # Volume
-    "IP":   "IS",   # Issue (IP = Issue/Part)
-    "PG":   "BP",   # Pagination — requires a split into BP and EP downstream
+    "IP":   "IS",   # Fascicolo (IP = Issue/Part)
+    "PG":   "BP",   # Pagine — poi divise in BP ed EP dal codice
 }
 
-# Canonical default values keyed by Python type. These are used by `_cast_scalar`
-# to resolve `None` inputs into type-safe empty values.
+# I valori "vuoti" standard. Se un dato manca, non usiamo MAI `None`. 
+# Usiamo questi valori di salvataggio per non rompere le funzioni matematiche.
 _TYPE_DEFAULTS: dict[type, Any] = {
     str:  "",
     int:  0,

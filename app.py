@@ -8311,121 +8311,121 @@ with ui.tags.div(id="mainContent", class_="main-content"):
 
 # --- Sidebar Management ---
 @render.express()
-@reactive.event(input.start_button)
 def toggle_sidebar():
-    with ui.tags.div(id="sidebar_2", class_="custom-sidebar"):
-        with ui.accordion(id="sidebar_accordion_data", multiple=False, open=False):
-            # Info Section
-            with ui.accordion_panel("Biblioshiny", icon=ICONS["home_colored"]):
-                ui.input_action_button("go_about_2", "Biblioshiny", class_="sidebar-button", icon=ICONS["home"])
-            # Data Section
-            with ui.accordion_panel("Data", icon=ICONS["database_colored"]):
-                ui.input_action_button("go_import_2", "Import or Load", class_="sidebar-button", icon=ICONS["data"])
-                ui.input_action_button("go_api_2", "API", class_="sidebar-button", icon=ICONS["api"])
-                ui.input_action_button("go_collections_2", "Merge Collection", class_="sidebar-button", icon=ICONS["merge"])
+    if df.get() is not None:
+        with ui.tags.div(id="sidebar_2", class_="custom-sidebar"):
+            with ui.accordion(id="sidebar_accordion_data", multiple=False, open=False):
+                # Info Section
+                with ui.accordion_panel("Biblioshiny", icon=ICONS["home_colored"]):
+                    ui.input_action_button("go_about_2", "Biblioshiny", class_="sidebar-button", icon=ICONS["home"])
+                # Data Section
+                with ui.accordion_panel("Data", icon=ICONS["database_colored"]):
+                    ui.input_action_button("go_import_2", "Import or Load", class_="sidebar-button", icon=ICONS["data"])
+                    ui.input_action_button("go_api_2", "API", class_="sidebar-button", icon=ICONS["api"])
+                    ui.input_action_button("go_collections_2", "Merge Collection", class_="sidebar-button", icon=ICONS["merge"])
 
-            # Filters Section
-            with ui.accordion_panel("Filters", icon=ICONS["filters_colored"]):
-                ui.input_action_button("go_filters", "Filters", class_="sidebar-button", icon=ICONS["filters"])
+                # Filters Section
+                with ui.accordion_panel("Filters", icon=ICONS["filters_colored"]):
+                    ui.input_action_button("go_filters", "Filters", class_="sidebar-button", icon=ICONS["filters"])
 
-            # Analysis Section
-            with ui.accordion_panel("Overview", icon=ICONS["play_colored"]):
-                ui.input_action_button("go_main", "Main Information", class_="sidebar-button", icon=ICONS["overview"])
-                ui.input_action_button("go_annual_scientific_production", "Annual Scientific Production", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
-                ui.input_action_button("go_average_citations_per_year", "Average Citations per Year", class_="sidebar-button", icon=ICONS["average_citations_per_doc"])
-                ui.input_action_button("go_three_field_plot", "Three-Field Plot", class_="sidebar-button", icon=ICONS["overview"])
-            with ui.accordion_panel("Sources", icon=ICONS["sources_colored"]):
-                ui.input_action_button("go_most_relevant_sources", "Most Relevant Sources", class_="sidebar-button", icon=ICONS["book_open"] if "book_open" in ICONS else ICONS["sources"]),
-                ui.input_action_button("go_most_local_cited_sources", "Most Local Cited Sources", class_="sidebar-button", icon=ICONS["book"] if "book" in ICONS else ICONS["sources"]),
-                ui.input_action_button("go_bradfords_law", "Bradford's Law", class_="sidebar-button", icon=ICONS["annual_growth_rate"]),
-                ui.input_action_button("go_sources_local_impact", "Sources' Local Impact", class_="sidebar-button", icon=ICONS["star"] if "star" in ICONS else ICONS["sources"]),
-                ui.input_action_button("go_sources_production_over_time", "Sources' Production over Time", class_="sidebar-button", icon=ICONS["calendar"] if "calendar" in ICONS else ICONS["timespan"]),
-            with ui.accordion_panel("Authors", icon=ICONS["authors_colored"]):
-                # Authors Section
-                ui.span("Authors", style="color: gray;")
-                ui.input_action_button("go_most_relevant_authors", "Most Relevant Authors", class_="sidebar-button", icon=ICONS["authors"])
-                ui.input_action_button("go_most_local_cited_authors", "Most Local Cited Authors", class_="sidebar-button", icon=ICONS["authors_single_authored_docs"])
-                ui.input_action_button("go_authors_production_over_time", "Authors' Production over Time", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
-                ui.input_action_button("go_lotkas_law", "Lotka's Law", class_="sidebar-button", icon=ICONS["overview"])
-                ui.input_action_button("go_authors_local_impact", "Authors' Local Impact", class_="sidebar-button", icon=ICONS["star"] if "star" in ICONS else ICONS["authors"])
-                # Affiliations Section
-                ui.span("Affiliations", style="color: gray;")
-                ui.input_action_button("go_most_relevant_affiliations", "Most Relevant Affiliations", class_="sidebar-button", icon=ICONS["database"])
-                ui.input_action_button("go_affiliations_production_over_time", "Affiliations' Production over Time", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
-                # Countries Section
-                ui.span("Countries", style="color: gray;")
-                ui.input_action_button("go_corresponding_authors_countries", "Corresponding Author's Countries", class_="sidebar-button", icon=ICONS["international_co_authorship"])
-                ui.input_action_button("go_countries_scientific_production", "Countries' Scientific Production", class_="sidebar-button", icon=ICONS["international_co_authorship"])
-                ui.input_action_button("go_countries_production_over_time", "Countries' Production over Time", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
-                ui.input_action_button("go_most_cited_countries", "Most Cited Countries", class_="sidebar-button", icon=ICONS["book"])
-            with ui.accordion_panel("Documents", icon=ICONS["documents_colored"]):
-                # Documents Section
-                ui.span("Documents", style="color: gray;")
-                ui.input_action_button("go_most_global_cited_documents", "Most Global Cited Documents", class_="sidebar-button", icon=ICONS["documents"])
-                ui.input_action_button("go_most_local_cited_documents", "Most Local Cited Documents", class_="sidebar-button", icon=ICONS["documents"])
+                # Analysis Section
+                with ui.accordion_panel("Overview", icon=ICONS["play_colored"]):
+                    ui.input_action_button("go_main", "Main Information", class_="sidebar-button", icon=ICONS["overview"])
+                    ui.input_action_button("go_annual_scientific_production", "Annual Scientific Production", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
+                    ui.input_action_button("go_average_citations_per_year", "Average Citations per Year", class_="sidebar-button", icon=ICONS["average_citations_per_doc"])
+                    ui.input_action_button("go_three_field_plot", "Three-Field Plot", class_="sidebar-button", icon=ICONS["overview"])
+                with ui.accordion_panel("Sources", icon=ICONS["sources_colored"]):
+                    ui.input_action_button("go_most_relevant_sources", "Most Relevant Sources", class_="sidebar-button", icon=ICONS["book_open"] if "book_open" in ICONS else ICONS["sources"]),
+                    ui.input_action_button("go_most_local_cited_sources", "Most Local Cited Sources", class_="sidebar-button", icon=ICONS["book"] if "book" in ICONS else ICONS["sources"]),
+                    ui.input_action_button("go_bradfords_law", "Bradford's Law", class_="sidebar-button", icon=ICONS["annual_growth_rate"]),
+                    ui.input_action_button("go_sources_local_impact", "Sources' Local Impact", class_="sidebar-button", icon=ICONS["star"] if "star" in ICONS else ICONS["sources"]),
+                    ui.input_action_button("go_sources_production_over_time", "Sources' Production over Time", class_="sidebar-button", icon=ICONS["calendar"] if "calendar" in ICONS else ICONS["timespan"]),
+                with ui.accordion_panel("Authors", icon=ICONS["authors_colored"]):
+                    # Authors Section
+                    ui.span("Authors", style="color: gray;")
+                    ui.input_action_button("go_most_relevant_authors", "Most Relevant Authors", class_="sidebar-button", icon=ICONS["authors"])
+                    ui.input_action_button("go_most_local_cited_authors", "Most Local Cited Authors", class_="sidebar-button", icon=ICONS["authors_single_authored_docs"])
+                    ui.input_action_button("go_authors_production_over_time", "Authors' Production over Time", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
+                    ui.input_action_button("go_lotkas_law", "Lotka's Law", class_="sidebar-button", icon=ICONS["overview"])
+                    ui.input_action_button("go_authors_local_impact", "Authors' Local Impact", class_="sidebar-button", icon=ICONS["star"] if "star" in ICONS else ICONS["authors"])
+                    # Affiliations Section
+                    ui.span("Affiliations", style="color: gray;")
+                    ui.input_action_button("go_most_relevant_affiliations", "Most Relevant Affiliations", class_="sidebar-button", icon=ICONS["database"])
+                    ui.input_action_button("go_affiliations_production_over_time", "Affiliations' Production over Time", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
+                    # Countries Section
+                    ui.span("Countries", style="color: gray;")
+                    ui.input_action_button("go_corresponding_authors_countries", "Corresponding Author's Countries", class_="sidebar-button", icon=ICONS["international_co_authorship"])
+                    ui.input_action_button("go_countries_scientific_production", "Countries' Scientific Production", class_="sidebar-button", icon=ICONS["international_co_authorship"])
+                    ui.input_action_button("go_countries_production_over_time", "Countries' Production over Time", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
+                    ui.input_action_button("go_most_cited_countries", "Most Cited Countries", class_="sidebar-button", icon=ICONS["book"])
+                with ui.accordion_panel("Documents", icon=ICONS["documents_colored"]):
+                    # Documents Section
+                    ui.span("Documents", style="color: gray;")
+                    ui.input_action_button("go_most_global_cited_documents", "Most Global Cited Documents", class_="sidebar-button", icon=ICONS["documents"])
+                    ui.input_action_button("go_most_local_cited_documents", "Most Local Cited Documents", class_="sidebar-button", icon=ICONS["documents"])
 
-                # Cited References Section
-                ui.span("Cited References", style="color: gray;")
-                ui.input_action_button("go_most_local_cited_references", "Most Local Cited References", class_="sidebar-button", icon=ICONS["references"])
-                ui.input_action_button("go_references_spectroscopy", "References Spectroscopy", class_="sidebar-button", icon=ICONS["references"])
+                    # Cited References Section
+                    ui.span("Cited References", style="color: gray;")
+                    ui.input_action_button("go_most_local_cited_references", "Most Local Cited References", class_="sidebar-button", icon=ICONS["references"])
+                    ui.input_action_button("go_references_spectroscopy", "References Spectroscopy", class_="sidebar-button", icon=ICONS["references"])
 
-                # Words Section
-                ui.span("Words", style="color: gray;")
-                ui.input_action_button("go_most_frequent_words", "Most Frequent Words", class_="sidebar-button", icon=ICONS["authors_keywords_de"])
-                ui.input_action_button("go_wordcloud", "WordCloud", class_="sidebar-button", icon=ICONS["authors_keywords_de"])
-                ui.input_action_button("go_treemap", "TreeMap", class_="sidebar-button", icon=ICONS["overview"])
-                ui.input_action_button("go_words_frequency_over_time", "Words' Frequency over Time", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
-                ui.input_action_button("go_trend_topics", "Trend Topics", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
+                    # Words Section
+                    ui.span("Words", style="color: gray;")
+                    ui.input_action_button("go_most_frequent_words", "Most Frequent Words", class_="sidebar-button", icon=ICONS["authors_keywords_de"])
+                    ui.input_action_button("go_wordcloud", "WordCloud", class_="sidebar-button", icon=ICONS["authors_keywords_de"])
+                    ui.input_action_button("go_treemap", "TreeMap", class_="sidebar-button", icon=ICONS["overview"])
+                    ui.input_action_button("go_words_frequency_over_time", "Words' Frequency over Time", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
+                    ui.input_action_button("go_trend_topics", "Trend Topics", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
 
-            with ui.accordion_panel("Clustering", icon=ICONS["clustering_colored"]):
-                ui.input_action_button("go_clustering", "Clustering", class_="sidebar-button", icon=ICONS["clustering"])
-            
-            with ui.accordion_panel("Conceptual Structure", icon=ICONS["conceptual_structure_colored"]):
-                ui.span("Network Approach", style="color: gray;")
-                ui.input_action_button("go_cooccurrence_network", "Co-occurrence Network", class_="sidebar-button", icon=ICONS["clustering"])
-                ui.input_action_button("go_thematic_map", "Thematic Map", class_="sidebar-button", icon=ICONS["overview"])
-                ui.input_action_button("go_thematic_evolution", "Thematic Evolution", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
+                with ui.accordion_panel("Clustering", icon=ICONS["clustering_colored"]):
+                    ui.input_action_button("go_clustering", "Clustering", class_="sidebar-button", icon=ICONS["clustering"])
+                
+                with ui.accordion_panel("Conceptual Structure", icon=ICONS["conceptual_structure_colored"]):
+                    ui.span("Network Approach", style="color: gray;")
+                    ui.input_action_button("go_cooccurrence_network", "Co-occurrence Network", class_="sidebar-button", icon=ICONS["clustering"])
+                    ui.input_action_button("go_thematic_map", "Thematic Map", class_="sidebar-button", icon=ICONS["overview"])
+                    ui.input_action_button("go_thematic_evolution", "Thematic Evolution", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
 
-                ui.span("Factorial Approach", style="color: gray;")
-                ui.input_action_button("go_factorial_analysis", "Factorial Analysis", class_="sidebar-button", icon=ICONS["overview"])
+                    ui.span("Factorial Approach", style="color: gray;")
+                    ui.input_action_button("go_factorial_analysis", "Factorial Analysis", class_="sidebar-button", icon=ICONS["overview"])
 
-            with ui.accordion_panel("Intellectual Structure", icon=ICONS["intellectual_structure_colored"]):
-                ui.input_action_button("go_citation_network", "Citation Network", class_="sidebar-button", icon=ICONS["references"])
-                ui.input_action_button("historiograph", "Historiograph", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
+                with ui.accordion_panel("Intellectual Structure", icon=ICONS["intellectual_structure_colored"]):
+                    ui.input_action_button("go_citation_network", "Citation Network", class_="sidebar-button", icon=ICONS["references"])
+                    ui.input_action_button("historiograph", "Historiograph", class_="sidebar-button", icon=ICONS["annual_growth_rate"])
 
-            with ui.accordion_panel("Social Structure", icon=ICONS["social_structure_colored"]):
-                ui.input_action_button("go_collaboration_network", "Collaboration Network", class_="sidebar-button", icon=ICONS["co_authors_per_doc"])
-                ui.input_action_button("go_countries_collaboration_network", "Countries Collaboration Network", class_="sidebar-button", icon=ICONS["international_co_authorship"])
+                with ui.accordion_panel("Social Structure", icon=ICONS["social_structure_colored"]):
+                    ui.input_action_button("go_collaboration_network", "Collaboration Network", class_="sidebar-button", icon=ICONS["co_authors_per_doc"])
+                    ui.input_action_button("go_countries_collaboration_network", "Countries Collaboration Network", class_="sidebar-button", icon=ICONS["international_co_authorship"])
 
-            with ui.accordion_panel("Report", icon=ICONS["report_colored"]):
-                ui.input_action_button("go_report", "Report", class_="sidebar-button", icon=ICONS["report"])
-            with ui.accordion_panel("Settings", icon=ICONS["settings_colored"]):
-                ui.input_action_button("go_settings", "Settings", class_="sidebar-button", icon=ICONS["settings"])
+                with ui.accordion_panel("Report", icon=ICONS["report_colored"]):
+                    ui.input_action_button("go_report", "Report", class_="sidebar-button", icon=ICONS["report"])
+                with ui.accordion_panel("Settings", icon=ICONS["settings_colored"]):
+                    ui.input_action_button("go_settings", "Settings", class_="sidebar-button", icon=ICONS["settings"])
 
-        # --- Footer ---
-        # Use static positioning and margin-top to avoid overlap with accordion content
-        with ui.tags.footer(
-            class_="custom-footer",
-            style=(
-            "background: #5567BB; color: white; text-align: center; padding: 10px 0;"
-            "position: static; width: 300px; z-index: 1000; margin-top: 30px;"
-            "transition: background-color 0.3s ease;"
-            ),
-        ):
-            ui.markdown(
-            """
-            <div style="display: flex; align-items: center; justify-content: center;">
-            <span style="margin-right: 8px;">© 2025</span>
-            <a href="https://www.bibliometrix.org/home/" style="display: flex; align-items: center;">
-                <img src="https://www.bibliometrix.org/logo_new.png" height="20px" style="filter: invert(100%) brightness(10000%); display: inline-block; vertical-align: middle;">
-            </a>
-            <a href="https://www.bibliometrix.org/" style="color: #fff; text-decoration: underline; display: inline-block; vertical-align: middle; margin-left: 10px;" target="_blank">
-                Bibliometrix
-            </a>
-            </div>
-            <p style="font-size: 9px">Version: 1.0.0 - Shiny for Python Based Application</p>
-            """
-            )
+            # --- Footer ---
+            # Use static positioning and margin-top to avoid overlap with accordion content
+            with ui.tags.footer(
+                class_="custom-footer",
+                style=(
+                "background: #5567BB; color: white; text-align: center; padding: 10px 0;"
+                "position: static; width: 300px; z-index: 1000; margin-top: 30px;"
+                "transition: background-color 0.3s ease;"
+                ),
+            ):
+                ui.markdown(
+                """
+                <div style="display: flex; align-items: center; justify-content: center;">
+                <span style="margin-right: 8px;">© 2025</span>
+                <a href="https://www.bibliometrix.org/home/" style="display: flex; align-items: center;">
+                    <img src="https://www.bibliometrix.org/logo_new.png" height="20px" style="filter: invert(100%) brightness(10000%); display: inline-block; vertical-align: middle;">
+                </a>
+                <a href="https://www.bibliometrix.org/" style="color: #fff; text-decoration: underline; display: inline-block; vertical-align: middle; margin-left: 10px;" target="_blank">
+                    Bibliometrix
+                </a>
+                </div>
+                <p style="font-size: 9px">Version: 1.0.0 - Shiny for Python Based Application</p>
+                """
+                )
 
 
 # --- Javascript for Sidebar ---

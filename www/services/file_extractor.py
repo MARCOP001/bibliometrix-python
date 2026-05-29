@@ -1,37 +1,52 @@
 import pandas as pd
 import os
 
-# Importiamo i parser per i file di testo proprietari
 from .parsers import parse_pubmed_medline_text, parse_wos_data, parse_cochrane_data
 
 def extract_from_file(file_path: str, source: str) -> list[dict]:
     """
-    Fase 1 (Extract) - Base Level.
     Legge un file grezzo esportato manualmente dalle principali piattaforme 
-    bibliometriche e lo converte in una lista di dizionari (raw_records).
+    bibliometriche e lo converte in una struttura dati Python standardizzata.
     
-    Supporta: WEB_OF_SCIENCE, SCOPUS, PUBMED, OPENALEX, DIMENSIONS, LENS, COCHRANE.
+    Args:
+        file_path (str): Il percorso assoluto o relativo del file da leggere.
+        source (str): Il nome del database di origine (es. "Scopus", "PubMed").
+        
+    Returns:
+        list[dict]: Una lista dove ogni dizionario rappresenta un singolo articolo.
+        
+    Raises:
+        FileNotFoundError: Se il percorso del file indicato non esiste.
+        ValueError: Se l'estensione del file o la fonte testuale non sono supportate.
     """
+    
+    # Controlliamo subito se il file esiste sul disco. 
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Errore: Il file '{file_path}' non esiste.")
         
+    # Pulizia dell'input: trasformiamo la fonte in maiuscolo e togliamo gli spazi accidentali
     source_upper = source.upper().strip()
+    
+    # Estraiamo l'estensione del file e la mettiamo in minuscolo
     file_extension = os.path.splitext(file_path)[1].lower()
     
-    # ---------------------------------------------------------
-    # STRATEGIA A: FILE DI TESTO PROPRIETARI (TXT/CIW)
-    # ---------------------------------------------------------
+    # FILE DI TESTO PROPRIETARI (TXT/CIW)
+    # Wos, Cochrane e PubMed
     if file_extension in ['.txt', '.ciw']:
         print(f"[{source_upper}] Lettura file testuale proprietario: {file_path}")
         
+        # Gestione specifica per PubMed:
         if source_upper == "PUBMED":
+            # PubMed richiede che il testo venga letto qui e passato al parser come stringa.
             with open(file_path, 'r', encoding='utf-8') as f:
                 text_content = f.read()
             return parse_pubmed_medline_text(text_content)
             
+        # Gestione per Web of Science:
         elif source_upper == "WEB_OF_SCIENCE":
             return parse_wos_data(file_path)
             
+        # Gestione per Cochrane:
         elif source_upper == "COCHRANE":
             return parse_cochrane_data(file_path)
             
@@ -41,10 +56,9 @@ def extract_from_file(file_path: str, source: str) -> list[dict]:
                 f"Ricevuto: {source_upper}"
             )
 
-    # ---------------------------------------------------------
-    # STRATEGIA B: FILE TABELLARI (CSV/XLSX)
-    # (Scopus, Dimensions, Lens, OpenAlex, e versioni tabellari di WoS)
-    # ---------------------------------------------------------
+    # FILE TABELLARI (CSV/XLSX/XLS)
+    # Scopus, Dimensions, Lens, OpenAlex e WoS tabellare
+
     elif file_extension in ['.csv', '.xlsx', '.xls']:
         print(f"[{source_upper}] Lettura file tabellare {file_extension}: {file_path}")
         
@@ -52,19 +66,24 @@ def extract_from_file(file_path: str, source: str) -> list[dict]:
             if file_extension == '.csv':
                 df = pd.read_csv(
                     file_path, 
-                    dtype=str, 
-                    on_bad_lines='skip',
-                    encoding='utf-8' 
+                    dtype=str,           # Legge tutto come stringa. 
+                    on_bad_lines='skip', # Se una riga del CSV è corrotta la salta.
+                    encoding='utf-8'     
                 )
             else:
                 df = pd.read_excel(file_path, dtype=str)
                 
+            # Sostituiamo i NaN con stringhe vuote.
             df = df.fillna("")
-            return df.to_dict(orient="records")
             
+            # Converte il DataFrame in una una lista di dizionari, dove ogni dizionario è una riga della tabella.
+            return df.to_dict(orient="records")
+             
         except pd.errors.EmptyDataError:
              print(f"[ERRORE] Il file '{file_path}' è vuoto.")
              return []
+             
+       
         except Exception as e:
              print(f"[ERRORE] Impossibile leggere il file tabellare: {e}")
              return []

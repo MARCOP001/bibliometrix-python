@@ -58,7 +58,7 @@ def extract_from_file(file_path: str, source: str) -> list[dict]:
 
     # FILE TABELLARI (CSV/XLSX/XLS)
     # Scopus, Dimensions, Lens, OpenAlex e WoS tabellare
-
+    
     elif file_extension in ['.csv', '.xlsx', '.xls']:
         print(f"[{source_upper}] Lettura file tabellare {file_extension}: {file_path}")
         
@@ -66,24 +66,33 @@ def extract_from_file(file_path: str, source: str) -> list[dict]:
             if file_extension == '.csv':
                 df = pd.read_csv(
                     file_path, 
-                    dtype=str,           # Legge tutto come stringa. 
-                    on_bad_lines='skip', # Se una riga del CSV è corrotta la salta.
+                    dtype=str,           
+                    on_bad_lines='skip', 
                     encoding='utf-8'     
                 )
             else:
                 df = pd.read_excel(file_path, dtype=str)
                 
+            # --- PATCH DIMENSIONS (Risoluzione del preambolo) ---
+            if source_upper == "DIMENSIONS":
+                # Se l'intestazione corretta è finita nella prima riga di dati a causa del preambolo:
+                if "Publication ID" not in df.columns:
+                    # Rinomina le colonne usando la prima riga di dati
+                    df.columns = df.iloc[0]
+                    # Elimina la prima riga (che ormai è diventata l'intestazione)
+                    df = df[1:].reset_index(drop=True)
+            # ----------------------------------------------------
+
             # Sostituiamo i NaN con stringhe vuote.
             df = df.fillna("")
             
-            # Converte il DataFrame in una una lista di dizionari, dove ogni dizionario è una riga della tabella.
+            # Converte il DataFrame in una una lista di dizionari.
             return df.to_dict(orient="records")
              
         except pd.errors.EmptyDataError:
              print(f"[ERRORE] Il file '{file_path}' è vuoto.")
              return []
              
-       
         except Exception as e:
              print(f"[ERRORE] Impossibile leggere il file tabellare: {e}")
              return []

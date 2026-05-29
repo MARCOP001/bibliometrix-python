@@ -126,29 +126,33 @@ LENS_SCALAR_MAP: dict[str, str] = {
     "Publication Type": "DT",          # Tipo documento
     "Source Title": "SO",              # Nome Rivista
     "Volume": "VL",                    # Volume
-    "Issue": "IS",                     # Fascicolo
+    "Issue Number": "IS",              # <-- Corretto (Prima era "Issue")
     "Start Page": "BP",                # Pagina iniziale
     "End Page": "EP",                  # Pagina finale
     "Abstract": "AB",                  # Abstract
-    "Citing Works Count": "TC",        # Citazioni
+    "Citing Works Count": "TC"         # Citazioni totali
 }
 
 # -----------------------------------------------------------------------------
-# DIZIONARIO DI MAPPING PER COCHRANE (TXT EXPORT)
+# MAPPING DICTIONARY FOR COCHRANE (TXT EXPORT)
 # -----------------------------------------------------------------------------
 COCHRANE_SCALAR_MAP: dict[str, str] = {
     "TI": "TI",     # Titolo
-    "SO": "SO",     # Source / Nome Rivista
-    "YR": "PY",     # Cochrane spesso usa YR per l'anno
-    "PY": "PY",     # Alternativa per l'anno
-    "DO": "DI",     # DOI in Cochrane è DO
-    "DI": "DI",     
+    "SO": "SO",     # Nome rivista
+    "YR": "PY",     # Anno
+    "PY": "PY",     
+    "DOI": "DI",    # <-- RISOLTO: Aggiunta etichetta DOI esplicita
+    "DO": "DI",     # Manteniamo DO per esportazioni più vecchie
+    "ID": "UT",     # <-- RISOLTO: L'ID di Cochrane diventa il nostro UT
+    "AN": "UT",     
     "AB": "AB",     # Abstract
     "VL": "VL",     # Volume
-    "NO": "IS",     # Issue number in Cochrane è spesso NO o IS
-    "IS": "IS",
+    "NO": "IS",     # Fascicolo
+    "IS": "IS",     
     "PT": "DT",     # Publication Type
+    "LA": "LA",     # Lingua
 }
+
 
 # Campi scalari annidati: (percorso_nested, tag_WoS)
 # Il percorso è una lista di chiavi da seguire nel dict raw.
@@ -871,14 +875,9 @@ def transform_dimensions_record(raw_record: dict) -> dict:
     return standardized
 
 # -----------------------------------------------------------------------------
-# FUNZIONE DI TRASFORMAZIONE PER COCHRANE
+# TRANSFORMATION FUNCTION FOR COCHRANE (TXT EXPORT)
 # -----------------------------------------------------------------------------
 def transform_cochrane_record(raw_record: dict) -> dict:
-    """
-    Converte un record estratto dal file di testo Cochrane nei tag WoS standard.
-    Il parser originale 'parse_cochrane_data' concatena già i campi multipli 
-    con il punto e virgola, quindi applichiamo uno split.
-    """
     standardized: dict = {
         tag: _get_default_value(contract)
         for tag, contract in COLUMN_TYPE_CONTRACTS.items()
@@ -886,13 +885,16 @@ def transform_cochrane_record(raw_record: dict) -> dict:
     
     standardized["DB"] = "COCHRANE"
 
-    # 1. Mappatura campi scalari diretti
+    # 1. Mappa i campi scalari (usando il dizionario)
     for coch_key, wos_tag in COCHRANE_SCALAR_MAP.items():
         if coch_key in raw_record and raw_record[coch_key]:
             standardized[wos_tag] = _cast_scalar(raw_record[coch_key], COLUMN_TYPE_CONTRACTS[wos_tag])
 
-    # 2. Gestione Speciale: Paginazione
-    # In Cochrane le pagine (PG) possono essere "1-10" o singole
+    # Se UT è ancora vuoto, usa il DOI come fallback
+    if not standardized["UT"] and standardized.get("DI"):
+        standardized["UT"] = standardized["DI"]
+
+    # 2. Divisione Pagine (PG -> BP ed EP)
     pg = str(raw_record.get("PG", ""))
     if "-" in pg:
         parts = pg.split("-", 1)
@@ -901,27 +903,29 @@ def transform_cochrane_record(raw_record: dict) -> dict:
     elif pg:
         standardized["BP"] = pg.strip()
 
-    # 3. Campi Multi-Valore (Split)
-    
-    # Autori (AU e AF): Il parser li ha uniti con "; "
+    # 3. Autori (AU e AF)
     au_str = str(raw_record.get("AU", ""))
     if au_str and au_str.strip():
-        authors_list = [a.strip() for a in au_str.split(";") if a.strip()]
+        # A volte Cochrane esporta liste già pronte, altre volte stringhe separate
+        if isinstance(raw_record["AU"], list):
+            authors_list = raw_record["AU"]
+        else:
+            authors_list = [a.strip() for a in au_str.split(";") if a.strip()]
+            
         standardized["AU"] = authors_list
         standardized["AF"] = authors_list
 
-    # Parole chiave (KW in Cochrane diventa DE in WoS)
-    kw_str = str(raw_record.get("KW", ""))
+    # 4. Le Parole Chiave (KY o KW -> DE e ID) <--- RISOLTO!
+    # Controlliamo prima se c'è "KY" (come nel tuo file), altrimenti cerchiamo "KW"
+    kw_str = str(raw_record.get("KY", raw_record.get("KW", "")))
     if kw_str and kw_str.strip():
-        standardized["DE"] = [k.strip() for k in kw_str.split(";") if k.strip()]
+        kw_list = [k.strip() for k in kw_str.split(";") if k.strip()]
+        standardized["DE"] = kw_list
+        standardized["ID"] = kw_list
 
-    # Pulizia standard su Nome Rivista
+    # Normalizzazione SO
     if standardized.get("SO"):
         standardized["SO"] = standardized["SO"].upper()
-
-    # Nota: Cochrane raramente esporta References strutturate (CR) o Affiliazioni (C1)
-    # in un formato facilmente parsabile nel txt base. I Type Contracts 
-    # assicureranno che rimangano liste vuote [] senza causare crash.
 
     return standardized
 
@@ -931,7 +935,6 @@ def transform_cochrane_record(raw_record: dict) -> dict:
 def transform_lens_record(raw_record: dict) -> dict:
     """
     Converte una riga del file CSV esportato da Lens nei tag WoS standard.
-    Lens separa quasi esclusivamente i campi multi-valore con il punto e virgola.
     """
     standardized: dict = {
         tag: _get_default_value(contract)
@@ -940,12 +943,16 @@ def transform_lens_record(raw_record: dict) -> dict:
     
     standardized["DB"] = "LENS"
 
+    # ==========================================
     # 1. Mappatura campi scalari diretti
+    # ==========================================
     for lens_key, wos_tag in LENS_SCALAR_MAP.items():
         if lens_key in raw_record and raw_record[lens_key]:
             standardized[wos_tag] = _cast_scalar(raw_record[lens_key], COLUMN_TYPE_CONTRACTS[wos_tag])
 
-    # 2. Campi Multi-Valore (Split)
+    # ==========================================
+    # 2. Campi Multi-Valore (Split sulle Liste)
+    # ==========================================
     
     # Autori (AU e AF): Lens li esporta nella colonna "Author/s" separati da ';'
     authors_str = str(raw_record.get("Author/s", ""))
@@ -959,22 +966,24 @@ def transform_lens_record(raw_record: dict) -> dict:
     if kw_str and kw_str.strip():
         standardized["DE"] = [k.strip() for k in kw_str.split(";") if k.strip()]
 
-    # Index Keywords (ID): Lens usa "Fields of Study" (basato su concetti AI come Dimensions)
+    # Index Keywords (ID): Lens usa "Fields of Study"
     fos_str = str(raw_record.get("Fields of Study", ""))
     if fos_str and fos_str.strip():
         standardized["ID"] = [f.strip() for f in fos_str.split(";") if f.strip()]
 
-    # Riferimenti Citati (CR): Lens usa "References" o "Lens ID delle referenze"
+    # Riferimenti Citati (CR): Lens usa "References" (Spesso vuoto, ma gestito in sicurezza)
     refs_str = str(raw_record.get("References", ""))
     if refs_str and refs_str.strip():
         standardized["CR"] = [r.strip() for r in refs_str.split(";") if r.strip()]
 
-    # Affiliazioni (C1): Spesso esportate come "Affiliations" in Lens
+    # Affiliazioni (C1): Esportate come "Affiliations" (Spesso vuoto in Lens)
     aff_str = str(raw_record.get("Affiliations", ""))
     if aff_str and aff_str.strip():
         standardized["C1"] = [aff.strip() for aff in aff_str.split(";") if aff.strip()]
 
-    # Pulizia standard su Nome Rivista (in maiuscolo come da convenzione)
+    # ==========================================
+    # 3. Normalizzazioni finali
+    # ==========================================
     if standardized.get("SO"):
         standardized["SO"] = standardized["SO"].upper()
 

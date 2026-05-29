@@ -801,15 +801,6 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 except Exception as e:
                                     ui.notification_show(f"❌ Errore durante la standardizzazione: {e}", type="error", duration=10)
                                     
-                    # Renderizza la preview dei dati (sostituisce il vecchio show_data())
-                    @render.ui
-                    def show_table():
-                        current_data = df.get()
-                        if current_data is not None and not current_data.empty:
-                            html_table = current_data.head(100).to_html(classes="table table-striped", index=False)
-                            return ui.HTML(f"<div style='overflow-x: auto;'>{html_table}</div>")
-                        return ui.p("Nessun record caricato o elaborato.", style="color: gray;")
-
                     # -------- ADVICE BUTTON --------
                     @render.ui
                     @reactive.event(input.advice_modal_completeness)
@@ -883,6 +874,16 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         spinners=input.start_button() > 0
                 )
 
+                # Visualizzazione reattiva della tabella 
+                @render.ui
+                def show_data_table():
+                    current_data = df.get()
+                    if current_data is not None and not current_data.empty:
+                        html_table = current_data.head(100).to_html(classes="table table-striped", index=False)
+                        return ui.HTML(f"<div style='overflow-x: auto;'>{html_table}</div>")
+                    return ui.p("Nessun record caricato. Usa 'Import raw data file(s)' o la sezione API.", style="color: gray;")
+
+
                 ui.h4("Description", style="color: #5567BB;")
                 ui.p("This section allows you to import, load, or export your dataset. You can choose to import raw data files from various databases, load previously saved Bibliometrix files, or use a sample dataset for testing purposes. Once the data is loaded, you can view it in a table format and export it as an Excel file or R Data Format for further analysis. " \
                 "Biblioshiny supports various bibliographic databases, allowing users to import and analyze collections exported from these sources. Click on a database below to visit its official website and download your data for analysis."),
@@ -939,24 +940,25 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                     ui.input_action_button("btn_run_api", "Esegui Live API", icon=ICONS["play"], class_="btn-primary")
             
             with ui.card(full_screen=True):
-                @render.ui
+                @reactive.effect  # <-- MODIFICATO: Da @render.ui a @reactive.effect
                 @reactive.event(input.btn_run_api)
                 def esegui_pipeline_api():
                     query = input.api_query()
                     source = input.api_source()
                     
                     if not query:
-                        return ui.notification_show("Inserisci una query valida prima di eseguire.", type="warning")
+                        ui.notification_show("Inserisci una query valida prima di eseguire.", type="warning")
+                        return  # <-- MODIFICATO: Usa solo return vuoto per uscire, non 'return ui.notification_show'
                         
                     ui.notification_show("⏳ Interrogazione API in corso...", duration=10)
                     
                     try:
                         # --- FASE 1: EXTRACT (via API) ---
-                        # Seleziona la funzione corretta richiamando api_retriever.py
                         raw_records = extract_data(query=query, source=source)
                         
                         if not raw_records:
-                            return ui.notification_show("Nessun risultato compatibile trovato con la query.", type="warning")
+                            ui.notification_show("Nessun risultato compatibile trovato con la query.", type="warning")
+                            return
                             
                         # --- FASE 2, 3 e 4: TRANSFORM E LOAD ---
                         source_mapped = "OPENALEX" if source == "openalex" else "PUBMED"
@@ -971,13 +973,15 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         df.set(standardized_df)
                         reset_all_analyses()
                         
-                        # Se il fetch va a buon fine reindirizza alla Overview
-                        ui.update_navs("hidden_tabs", selected="overview")
-                        return ui.notification_show(f"✅ Download API completato! Creati e testati {len(standardized_df)} record uniformati.", duration=5)
+                      
+                        ui.update_navs("hidden_tabs", selected="import")
+                        
+                        # <-- MODIFICATO: rimosso il 'return'
+                        ui.notification_show(f"✅ Download API completato! Creati e testati {len(standardized_df)} record uniformati.", duration=5)
                         
                     except Exception as e:
-                        return ui.notification_show(f"❌ Fallimento del processo API: {e}", type="error", duration=15)
-        
+                        # <-- MODIFICATO: rimosso il 'return'
+                        ui.notification_show(f"❌ Fallimento del processo API: {e}", type="error", duration=15)
         with ui.nav_panel("None", value="collections"):
             ui.h3("🚧 Warning: Merge Collection is under construction 🚧")
 

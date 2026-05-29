@@ -772,22 +772,33 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                     elif selected_action == "1A": # Dati Locali (Base Level)
                         files = input.Dataset()
                         if files:
-                            all_raw_records = []
-                            # --- FASE 1: EXTRACT ---
+                            all_standardized_dfs = []
+                            
+                            # --- FASE 1, 2, 3: EXTRACT & TRANSFORM PER FILE ---
                             for file_info in files:
                                 file_path = file_info["datapath"]
+                                file_name = file_info["name"]
+                                # Extract the extension to pass to standardizer
+                                file_ext = os.path.splitext(file_name)[1].lower() 
+                                
                                 try:
+                                    # Extract raw records from the specific file
                                     raw_records = extract_from_file(file_path, source=source_upper)
-                                    all_raw_records.extend(raw_records)
-                                except Exception as e:
-                                    ui.notification_show(f"Errore di estrazione ({file_info['name']}): {e}", type="error", duration=8)
-
-                            # --- FASE 2, 3 e 4: TRANSFORM ---
-                            if all_raw_records:
-                                try:
-                                    standardized_df = convert2df(all_raw_records, source=source_upper, validate=True)
                                     
-                                    # ---> AGGIUNGI QUESTE 3 RIGHE QUI <---
+                                    if raw_records:
+                                        # Transform to DF immediately using the specific file_type
+                                        df_part = convert2df(raw_records, source=source_upper, file_type=file_ext, validate=True)
+                                        all_standardized_dfs.append(df_part)
+                                        
+                                except Exception as e:
+                                    ui.notification_show(f"Errore di elaborazione per ({file_name}): {e}", type="error", duration=8)
+
+                            # --- FASE 4: MERGE E LOAD ---
+                            if all_standardized_dfs:
+                                try:
+                                    # Combine all standard dataframes into one
+                                    standardized_df = pd.concat(all_standardized_dfs, ignore_index=True)
+                                    
                                     # Converte l'anno in numerico e rimuove le righe senza anno valido
                                     standardized_df["PY"] = pd.to_numeric(standardized_df["PY"], errors="coerce")
                                     standardized_df = standardized_df.dropna(subset=["PY"]) 
@@ -799,8 +810,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                     ui.notification_show(f"✅ ETL completato con successo! Elaborati {len(standardized_df)} record.", duration=5)
                                     
                                 except Exception as e:
-                                    ui.notification_show(f"❌ Errore durante la standardizzazione: {e}", type="error", duration=10)
-                                    
+                                    ui.notification_show(f"❌ Errore durante l'aggregazione dei dati: {e}", type="error", duration=10)
                     # -------- ADVICE BUTTON --------
                     @render.ui
                     @reactive.event(input.advice_modal_completeness)
@@ -962,7 +972,9 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                             
                         # --- FASE 2, 3 e 4: TRANSFORM E LOAD ---
                         source_mapped = "OPENALEX" if source == "openalex" else "PUBMED"
-                        standardized_df = convert2df(raw_records, source=source_mapped, validate=True)
+                        
+                        # Pass "api" as file_type since these aren't traditional physical files
+                        standardized_df = convert2df(raw_records, source=source_mapped, file_type="api", validate=True)
                         
                         # Prepara il dato per i calcoli temporali della UI
                         standardized_df["PY"] = pd.to_numeric(standardized_df["PY"], errors="coerce")

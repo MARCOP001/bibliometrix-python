@@ -63,30 +63,37 @@ def extract_from_file(file_path: str, source: str) -> list[dict]:
         print(f"[{source_upper}] Lettura file tabellare {file_extension}: {file_path}")
         
         try:
+            # Calcola quante righe saltare: 1 per Dimensions (disclaimer), 0 per gli altri
+            righe_da_saltare = 1 if source_upper == "DIMENSIONS" else 0
+
             if file_extension == '.csv':
                 df = pd.read_csv(
                     file_path, 
                     dtype=str,           # Legge tutto come stringa. 
+                    skiprows=righe_da_saltare, # Salta la prima riga se la fonte è Dimensions
                     on_bad_lines='skip', # Se una riga del CSV è corrotta la salta.
                     encoding='utf-8'     
                 )
             else:
-                df = pd.read_excel(file_path, dtype=str)
+                df = pd.read_excel(
+                    file_path, 
+                    dtype=str,
+                    skiprows=righe_da_saltare # Salta la prima riga se la fonte è Dimensions
+                )
                 
             # Sostituiamo i NaN con stringhe vuote.
             df = df.fillna("")
             
             # Converte il DataFrame in una una lista di dizionari, dove ogni dizionario è una riga della tabella.
             return df.to_dict(orient="records")
-             
+                
         except pd.errors.EmptyDataError:
-             print(f"[ERRORE] Il file '{file_path}' è vuoto.")
-             return []
-             
-       
+                print(f"[ERRORE] Il file '{file_path}' è vuoto.")
+                return []
+                
         except Exception as e:
-             print(f"[ERRORE] Impossibile leggere il file tabellare: {e}")
-             return []
+                print(f"[ERRORE] Impossibile leggere il file tabellare: {e}")
+                return []
              
     else:
         raise ValueError(

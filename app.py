@@ -108,7 +108,7 @@ with ui.tags.div(class_="header-bar"):
             @functools.lru_cache(maxsize=1)
             def get_latest_cran_version():
                 try:
-                    resp = requests.get("https://crandb.r-pkg.org/bibliometrix")
+                    resp = requests.get("https://crandb.r-pkg.org/bibliometrix", timeout=3)
                     if resp.status_code == 200:
                         data = resp.json()
                         return data.get("Version", None)
@@ -587,6 +587,14 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                 # Instead of complex introspection, use a simple direct approach
                 # Only reset if variables exist to avoid unnecessary operations
                 pass  # Analysis results will be reset naturally when new data is loaded
+
+            def prepare_dataframe_for_app(dataframe: pd.DataFrame) -> pd.DataFrame:
+                """Prepare standardized ETL output for Shiny analysis widgets."""
+                prepared = dataframe.copy()
+                prepared["PY"] = pd.to_numeric(prepared["PY"], errors="coerce")
+                prepared = prepared.dropna(subset=["PY"])
+                prepared["PY"] = prepared["PY"].astype(int)
+                return prepared
             
             report_choices = reactive.Value({})
             report_excel = reactive.Value(io.BytesIO())
@@ -799,10 +807,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                     # Combine all standard dataframes into one
                                     standardized_df = pd.concat(all_standardized_dfs, ignore_index=True)
                                     
-                                    # Converte l'anno in numerico e rimuove le righe senza anno valido
-                                    standardized_df["PY"] = pd.to_numeric(standardized_df["PY"], errors="coerce")
-                                    standardized_df = standardized_df.dropna(subset=["PY"]) 
-                                    standardized_df["PY"] = standardized_df["PY"].astype(int)
+                                    standardized_df = prepare_dataframe_for_app(standardized_df)
                                     
                                     # --- FASE LOAD: Salvataggio nel reattivo Shiny ---
                                     df.set(standardized_df)
@@ -811,6 +816,29 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                     
                                 except Exception as e:
                                     ui.notification_show(f"❌ Errore durante l'aggregazione dei dati: {e}", type="error", duration=10)
+                            else:
+                                ui.notification_show("Nessun record valido trovato nei file caricati.", type="warning", duration=8)
+
+                    elif selected_action == "1B": # File gia' standardizzati
+                        files = input.Dataset()
+                        if files:
+                            loaded_dfs = []
+                            for file_info in files:
+                                try:
+                                    loaded = pd.read_excel(file_info["datapath"])
+                                    loaded_dfs.append(convert2df(loaded.to_dict(orient="records"), source="WEB_OF_SCIENCE", validate=True))
+                                except Exception as e:
+                                    ui.notification_show(f"Errore nel caricamento di ({file_info['name']}): {e}", type="error", duration=8)
+
+                            if loaded_dfs:
+                                try:
+                                    standardized_df = pd.concat(loaded_dfs, ignore_index=True)
+                                    standardized_df = prepare_dataframe_for_app(standardized_df)
+                                    df.set(standardized_df)
+                                    reset_all_analyses()
+                                    ui.notification_show(f"File Bibliometrix caricato: {len(standardized_df)} record.", duration=5)
+                                except Exception as e:
+                                    ui.notification_show(f"Errore durante il caricamento: {e}", type="error", duration=10)
                     # -------- ADVICE BUTTON --------
                     @render.ui
                     @reactive.event(input.advice_modal_completeness)
@@ -976,10 +1004,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         # Pass "api" as file_type since these aren't traditional physical files
                         standardized_df = convert2df(raw_records, source=source_mapped, file_type="api", validate=True)
                         
-                        # Prepara il dato per i calcoli temporali della UI
-                        standardized_df["PY"] = pd.to_numeric(standardized_df["PY"], errors="coerce")
-                        standardized_df = standardized_df.dropna(subset=["PY"])
-                        standardized_df["PY"] = standardized_df["PY"].astype(int)
+                        standardized_df = prepare_dataframe_for_app(standardized_df)
                         
                         # Assegna i dati al DataFrame reattivo
                         df.set(standardized_df)

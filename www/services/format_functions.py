@@ -1176,6 +1176,7 @@ def format_sr_column(entry, source, file_type):  # Function for SR Column (forma
 
                 initials = ''.join([name[0] + '.' for name in names.split() if name])
                 author_dict = {'Surname': surname, 'Name Initials': initials}
+                break
 
             publication_year = entry.get('year', '')
             journal = entry.get('journal', '').replace('\n', ' ')

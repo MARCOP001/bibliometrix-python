@@ -63,10 +63,17 @@ from google.genai import types
 from shiny import reactive, render
 from shinywidgets import render_widget
 from shiny.express import ui, input, render
-# --- IMPORT DELLA NUOVA PIPELINE ETL ---
+# MODIFICA rispetto alla versione fornita: import diretto della pipeline ETL.
+# La dashboard deve usare lo stesso percorso extract -> standardize richiesto
+# dalla traccia, cosi' le funzioni ricevono sempre un DataFrame nel formato
+# Bibliometrix atteso.
 from www.services.file_extractor import extract_from_file
 from www.services.standardizer import convert2df
 from www.services.api_retriever import extract_data
+
+# MODIFICA rispetto alla versione fornita: le tabelle itables ricevono stringhe
+# CSS nel parametro `style`. Usare `width:100%;`, non `width=100%;`, evita
+# errori di parsing nel tab Table.
 
 # Setup the Directory for static assets - optimized for performance
 base_dir = tempfile.gettempdir()  # Use system temp dir instead of creating new temp file
@@ -108,6 +115,8 @@ with ui.tags.div(class_="header-bar"):
             @functools.lru_cache(maxsize=1)
             def get_latest_cran_version():
                 try:
+                    # Timeout breve: il controllo CRAN e' accessorio e non deve
+                    # bloccare l'avvio della dashboard se la rete e' lenta.
                     resp = requests.get("https://crandb.r-pkg.org/bibliometrix", timeout=3)
                     if resp.status_code == 200:
                         data = resp.json()
@@ -591,6 +600,9 @@ with ui.tags.div(id="mainContent", class_="main-content"):
             def prepare_dataframe_for_app(dataframe: pd.DataFrame) -> pd.DataFrame:
                 """Prepare standardized ETL output for Shiny analysis widgets."""
                 prepared = dataframe.copy()
+                # MODIFICA rispetto alla versione fornita: molte analisi
+                # confrontano o ordinano gli anni. Convertire `PY` qui evita che
+                # ogni funzione debba gestire stringhe, vuoti o NaN.
                 prepared["PY"] = pd.to_numeric(prepared["PY"], errors="coerce")
                 prepared = prepared.dropna(subset=["PY"])
                 prepared["PY"] = prepared["PY"].astype(int)
@@ -772,11 +784,17 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                     source_upper = db_mapping.get(database_raw, "OPENALEX")
                     ui.markdown(f"<h3 style='text-align:center; color: #5567BB;'>Dati elaborati: {source_upper}</h3>")
 
+                    # MODIFICA rispetto alla versione fornita: separiamo sample,
+                    # file grezzi e file gia' standardizzati. I sample sono gia'
+                    # pronti per la dashboard, quindi non passano dalla pipeline ETL.
                     if selected_action == "1C": # Dati Sample di Test
                         sample_data = pd.read_excel("sources/samples/sample.xlsx")
                         df.set(sample_data)
                         reset_all_analyses()
 
+                    # MODIFICA rispetto alla versione fornita: per i file grezzi
+                    # usiamo la catena ETL esplicita richiesta:
+                    # estrazione record -> standardizzazione -> validazione -> load.
                     elif selected_action == "1A": # Dati Locali (Base Level)
                         files = input.Dataset()
                         if files:
@@ -820,6 +838,9 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 ui.notification_show("Nessun record valido trovato nei file caricati.", type="warning", duration=8)
 
                     elif selected_action == "1B": # File gia' standardizzati
+                        # Anche i file gia' esportati vengono fatti passare da
+                        # `convert2df(validate=True)`: cosi' il DataFrame caricato
+                        # mantiene lo stesso contratto usato dalle funzioni.
                         files = input.Dataset()
                         if files:
                             loaded_dfs = []
@@ -870,8 +891,10 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         if current_data is None or current_data.empty:
                             return ui.p("Nessun dato disponibile per il report.")
                             
-                        # --- FIX: RECUPERO DEL NOME DATABASE DAL DATAFRAME ---
-                        # Controlla se la colonna DB esiste e prende il primo valore
+                        # MODIFICA rispetto alla versione fornita: recuperiamo il
+                        # DB dal DataFrame corrente invece di usare una variabile
+                        # locale potenzialmente vecchia. Dopo ETL o API il dataset
+                        # attivo puo' essere cambiato nella stessa sessione.
                         if "DB" in current_data.columns and not current_data.empty:
                             database = current_data["DB"].iloc[0]
                         else:
@@ -900,7 +923,8 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         else:
                             database = "Sconosciuto"
                         
-                        # ... resto del tuo codice originale per salvare l'immagine ...
+                        # Stesso motivo del report: l'immagine deve riferirsi al
+                        # dataset attualmente caricato, non alla scelta precedente.
                         _, _, fig = get_table(database, df, dpi=dpi.get(), modal=False)
                         fig.write_image(completeness_table_image_path)
                         return ui.notification_show(f"✅ Missing data image saved into {completeness_table_image_path}", duration=5, close_button=False)
@@ -912,7 +936,9 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         spinners=input.start_button() > 0
                 )
 
-                # Visualizzazione reattiva della tabella 
+                # AGGIUNTA rispetto alla versione fornita: preview reattiva del
+                # DataFrame caricato. Serve a verificare subito che import/API
+                # abbiano popolato davvero lo stato condiviso `df`.
                 @render.ui
                 def show_data_table():
                     current_data = df.get()
@@ -978,7 +1004,11 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                     ui.input_action_button("btn_run_api", "Esegui Live API", icon=ICONS["play"], class_="btn-primary")
             
             with ui.card(full_screen=True):
-                @reactive.effect  # <-- MODIFICATO: Da @render.ui a @reactive.effect
+                # AGGIUNTA rispetto alla versione fornita: questa sezione rende
+                # operativa la pagina API, che prima era solo un placeholder. Usa
+                # `reactive.effect` perche' non deve restituire UI: scarica record,
+                # li standardizza e aggiorna il DataFrame reattivo.
+                @reactive.effect
                 @reactive.event(input.btn_run_api)
                 def esegui_pipeline_api():
                     query = input.api_query()
@@ -986,7 +1016,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                     
                     if not query:
                         ui.notification_show("Inserisci una query valida prima di eseguire.", type="warning")
-                        return  # <-- MODIFICATO: Usa solo return vuoto per uscire, non 'return ui.notification_show'
+                        return
                         
                     ui.notification_show("⏳ Interrogazione API in corso...", duration=10)
                     
@@ -999,9 +1029,13 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                             return
                             
                         # --- FASE 2, 3 e 4: TRANSFORM E LOAD ---
+                        # Le API non arrivano come file Scopus/WoS; questo mapping
+                        # seleziona il parser/standardizzatore corretto per record
+                        # OpenAlex o PubMed.
                         source_mapped = "OPENALEX" if source == "openalex" else "PUBMED"
                         
-                        # Pass "api" as file_type since these aren't traditional physical files
+                        # `file_type="api"` evita di fingere che i record live siano
+                        # CSV/TXT: la standardizzazione sa che arrivano da API.
                         standardized_df = convert2df(raw_records, source=source_mapped, file_type="api", validate=True)
                         
                         standardized_df = prepare_dataframe_for_app(standardized_df)
@@ -1013,11 +1047,9 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                       
                         ui.update_navs("hidden_tabs", selected="import")
                         
-                        # <-- MODIFICATO: rimosso il 'return'
                         ui.notification_show(f"✅ Download API completato! Creati e testati {len(standardized_df)} record uniformati.", duration=5)
                         
                     except Exception as e:
-                        # <-- MODIFICATO: rimosso il 'return'
                         ui.notification_show(f"❌ Fallimento del processo API: {e}", type="error", duration=15)
         with ui.nav_panel("None", value="collections"):
             ui.h3("🚧 Warning: Merge Collection is under construction 🚧")
@@ -8349,6 +8381,9 @@ with ui.tags.div(id="mainContent", class_="main-content"):
 # --- Sidebar Management ---
 @render.express()
 def toggle_sidebar():
+    # MODIFICA rispetto alla versione fornita: la sidebar delle analisi viene
+    # mostrata solo dopo il caricamento di un dataset. In questo modo l'utente
+    # non puo' avviare funzioni bibliometriche quando `df` e' ancora vuoto.
     if df.get() is not None:
         with ui.tags.div(id="sidebar_2", class_="custom-sidebar"):
             with ui.accordion(id="sidebar_accordion_data", multiple=False, open=False):

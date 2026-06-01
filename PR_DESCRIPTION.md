@@ -248,3 +248,103 @@ Il nostro contributo introduce:
 - patch di compatibilita' per funzioni analitiche selezionate;
 
 Il risultato e' un DataFrame standardizzato, utilizzabile dalla dashboard Bibliometrix-Python e dalle funzioni analitiche esistenti anche con dati provenienti da piu' sorgenti bibliografiche
+
+
+
+
+
+## LOG DI ESECUZIONE STEP-BY-STEP
+Durante questa esecuzione di esempio, sono stati testati sia il Base Level, tramite importazione da parte di una delle sorgenti, che l'Advanced Level, tramite chiamata API.
+
+2026-06-01 19:13:00 | INFO     | bibliometrix.app | Avvio applicazione Bibliometrix Shiny
+2026-06-01 19:13:39 | INFO     | bibliometrix.app | Avvio applicazione Bibliometrix Shiny
+python : INFO:     Started server process [20280]
+In riga:1 car:1
++ python -u -W ignore -m shiny run app.py > log_esecuzione.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (INFO:     Started server process [20280]:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:61087 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64146 - "WebSocket /websocket/" [accepted]
+INFO:     connection open
+2026-06-01 19:13:59 | INFO     | bibliometrix.app | Avvio applicazione Bibliometrix Shiny
+C:\Users\pisac\OneDrive\Desktop\HARDWARE AND SOFTWARE FOR BIG DATA MOD. B\Progetto HwSwB\bibliometrix-python\app.py:8689: ShinyDeprecationWarning: `shiny.ui.update_navs()` has been superseded by 
+`shiny.ui.update_navset()` and will be removed in the near future.
+  ui.update_navs("hidden_tabs", selected="import")
+INFO:     127.0.0.1:63745 - "POST /session/a8bd2bfe598b47dad1624b3a1d3581cfc9f1ebbfb4a3b0764d602cfd0a243e31/upload/c6b5c80a7d260d236c37a5e2?w= HTTP/1.1" 200 OK
+2026-06-01 19:14:24 | INFO     | bibliometrix.app | Avvio caricamento dati da interfaccia: azione=1A, database=wos
+2026-06-01 19:14:24 | INFO     | bibliometrix.app | Import raw data: 1 file ricevuti
+2026-06-01 19:14:24 | INFO     | bibliometrix.app | Elaborazione file: nome=WoS_collection.txt, estensione=.txt, sorgente=WEB_OF_SCIENCE
+2026-06-01 19:14:24 | INFO     | www.services.file_extractor | [WEB_OF_SCIENCE] Avvio lettura file: C:\Users\pisac\AppData\Local\Temp\fileupload-k10ziq6d\tmph5h0uke3\0.txt
+2026-06-01 19:14:24 | INFO     | www.services.file_extractor | [WEB_OF_SCIENCE] Lettura file testuale .txt
+2026-06-01 19:14:24 | INFO     | www.services.parsers | Parsing Web of Science: C:\Users\pisac\AppData\Local\Temp\fileupload-k10ziq6d\tmph5h0uke3\0.txt
+2026-06-01 19:14:24 | INFO     | www.services.parsers | Parsing Web of Science completato: 153 record
+2026-06-01 19:14:24 | INFO     | www.services.file_extractor | [WEB_OF_SCIENCE] Record estratti da file testuale: 153
+2026-06-01 19:14:24 | INFO     | bibliometrix.app | Estrazione completata per WoS_collection.txt: record_grezzi=153
+2026-06-01 19:14:24 | INFO     | www.services.standardizer | Avvio standardizzazione: source=WEB_OF_SCIENCE, file_type=.txt, record_input=153, validate=True, csv_export=False
+2026-06-01 19:14:24 | INFO     | www.services.standardizer | Record trasformati: validi=153, saltati=0, gia_standardizzati=0, openalex=0, formatter_legacy=153
+2026-06-01 19:14:24 | INFO     | www.services.standardizer | Validazione DataFrame completata
+2026-06-01 19:14:24 | INFO     | www.services.standardizer | DataFrame standardizzato pronto: righe=153, colonne=24
+2026-06-01 19:14:24 | INFO     | bibliometrix.app | Standardizzazione completata per WoS_collection.txt: righe=153, colonne=24
+2026-06-01 19:14:24 | INFO     | bibliometrix.app | Merge DataFrame standardizzati completato: righe=153, colonne=24
+2026-06-01 19:14:24 | INFO     | bibliometrix.app | Preparazione per dashboard completata: righe_valide=153
+2026-06-01 19:14:24 | INFO     | bibliometrix.app | Dataset caricato nello stato reattivo Shiny
+C:\Users\pisac\OneDrive\Desktop\HARDWARE AND SOFTWARE FOR BIG DATA MOD. B\Progetto HwSwB\bibliometrix-python\app.py:8704: ShinyDeprecationWarning: `shiny.ui.update_navs()` has been superseded by 
+`shiny.ui.update_navset()` and will be removed in the near future.
+  ui.update_navs("hidden_tabs", selected="API")
+2026-06-01 19:14:44 | INFO     | bibliometrix.app | Avvio pipeline API da interfaccia: source=openalex, query=machine learning
+2026-06-01 19:14:44 | INFO     | www.services.api_retriever | Dispatch API: source=openalex, query=machine learning, output_dir=data\raw
+2026-06-01 19:14:44 | INFO     | www.services.api_retriever | Avvio estrazione OpenAlex: query=machine learning, max_results=100
+
+======================================================================
+ESTRAZIONE OPENALEX - query: 'machine learning'
+======================================================================
+
+--- Pagina 1 ---
+2026-06-01 19:14:44 | INFO     | www.services.api_retriever | Richiesta HTTP: tentativo=1/3, url=https://api.openalex.org/works?search=machine+learning&cursor=*&per-page=25&mailto=aniello...
+  -> GET https://api.openalex.org/works?search=machine+learning&cursor=*&per-page=25&mailto=aniello... (tentativo 1/3)
+2026-06-01 19:14:46 | INFO     | www.services.api_retriever | Richiesta HTTP completata con successo: status=200
+2026-06-01 19:14:46 | INFO     | www.services.api_retriever | OpenAlex pagina 1: estratti=25, totale_accumulato=25, disponibili=3491621
+  -> Estratti 25 works (totale: 25 / 3491621 disponibili)
+
+--- Pagina 2 ---
+2026-06-01 19:14:46 | INFO     | www.services.api_retriever | Richiesta HTTP: tentativo=1/3, url=https://api.openalex.org/works?search=machine+learning&cursor=Ils0NDcwLjQ5NiwgMTQ0NzYzMjAw...
+  -> GET https://api.openalex.org/works?search=machine+learning&cursor=Ils0NDcwLjQ5NiwgMTQ0NzYzMjAw... (tentativo 1/3)
+2026-06-01 19:14:48 | INFO     | www.services.api_retriever | Richiesta HTTP completata con successo: status=200
+2026-06-01 19:14:48 | INFO     | www.services.api_retriever | OpenAlex pagina 2: estratti=25, totale_accumulato=50, disponibili=3491621
+  -> Estratti 25 works (totale: 50 / 3491621 disponibili)
+
+--- Pagina 3 ---
+2026-06-01 19:14:49 | INFO     | www.services.api_retriever | Richiesta HTTP: tentativo=1/3, url=https://api.openalex.org/works?search=machine+learning&cursor=IlszMzM2LjM0OTYsIDgxNTE4NDAw...
+  -> GET https://api.openalex.org/works?search=machine+learning&cursor=IlszMzM2LjM0OTYsIDgxNTE4NDAw... (tentativo 1/3)
+2026-06-01 19:14:51 | INFO     | www.services.api_retriever | Richiesta HTTP completata con successo: status=200
+2026-06-01 19:14:51 | INFO     | www.services.api_retriever | OpenAlex pagina 3: estratti=25, totale_accumulato=75, disponibili=3491621
+  -> Estratti 25 works (totale: 75 / 3491621 disponibili)
+
+--- Pagina 4 ---
+2026-06-01 19:14:51 | INFO     | www.services.api_retriever | Richiesta HTTP: tentativo=1/3, url=https://api.openalex.org/works?search=machine+learning&cursor=IlsyNzUyLjY4MjEsIDEzMTkxNTUy...
+  -> GET https://api.openalex.org/works?search=machine+learning&cursor=IlsyNzUyLjY4MjEsIDEzMTkxNTUy... (tentativo 1/3)
+2026-06-01 19:14:53 | INFO     | www.services.api_retriever | Richiesta HTTP completata con successo: status=200
+2026-06-01 19:14:53 | INFO     | www.services.api_retriever | OpenAlex pagina 4: estratti=25, totale_accumulato=100, disponibili=3491621
+  -> Estratti 25 works (totale: 100 / 3491621 disponibili)
+  -> Raggiunto limite o fine risultati. Dataset completato.
+2026-06-01 19:14:53 | INFO     | www.services.api_retriever | Salvataggio OpenAlex JSON: file=data\raw\openalex_20260601_191453.json, record=100
+
+[SALVATAGGIO] OpenAlex JSON -> data\raw\openalex_20260601_191453.json  (100 record)
+2026-06-01 19:14:53 | INFO     | www.services.api_retriever | Estrazione OpenAlex completata: record=100
+2026-06-01 19:14:53 | INFO     | bibliometrix.app | Estrazione API completata: source=openalex, record_grezzi=100
+2026-06-01 19:14:53 | INFO     | www.services.standardizer | Avvio standardizzazione: source=OPENALEX, file_type=api, record_input=100, validate=True, csv_export=False
+2026-06-01 19:14:54 | INFO     | www.services.standardizer | Record trasformati: validi=100, saltati=0, gia_standardizzati=0, openalex=100, formatter_legacy=0
+2026-06-01 19:14:54 | INFO     | www.services.standardizer | Validazione DataFrame completata
+2026-06-01 19:14:54 | INFO     | www.services.standardizer | DataFrame standardizzato pronto: righe=100, colonne=24
+2026-06-01 19:14:54 | INFO     | bibliometrix.app | Standardizzazione API completata: source=OPENALEX, righe=100, colonne=24
+2026-06-01 19:14:54 | INFO     | bibliometrix.app | Preparazione dashboard per dati API completata: righe_valide=100
+2026-06-01 19:14:54 | INFO     | bibliometrix.app | Dataset API caricato nello stato reattivo Shiny
+C:\Users\pisac\OneDrive\Desktop\HARDWARE AND SOFTWARE FOR BIG DATA MOD. B\Progetto HwSwB\bibliometrix-python\app.py:1152: ShinyDeprecationWarning: `shiny.ui.update_navs()` has been superseded by 
+`shiny.ui.update_navset()` and will be removed in the near future.
+  ui.update_navs("hidden_tabs", selected="import")
+

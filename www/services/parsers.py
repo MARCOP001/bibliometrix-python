@@ -4,8 +4,7 @@ Parser per convertire export bibliografici grezzi in dizionari intermedi.
 I parser di questo modulo leggono formati specifici delle sorgenti esterne
 senza applicare lo schema finale dell'applicazione. 
 
-La standardizzazione dei
-campi e dei tipi resta responsabilita' di "standardizer.py".
+La standardizzazione dei campi e dei tipi resta responsabilita' di "standardizer.py".
 """
 
 import logging

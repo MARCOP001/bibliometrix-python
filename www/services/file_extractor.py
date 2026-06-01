@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 import zipfile
@@ -13,6 +14,7 @@ from .parsers import parse_cochrane_data, parse_pubmed_medline_text, parse_wos_d
 
 
 SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xls", ".txt", ".ciw", ".bib"}
+logger = logging.getLogger(__name__)
 
 
 def _annotate_records(records: list[dict], file_extension: str, source: str) -> list[dict]:
@@ -111,6 +113,7 @@ def _extract_zip_file(file_path: str, source_upper: str) -> list[dict]:
         ValueError: Propagata dall'estrazione annidata per contenuti non
             supportati.
     """
+    logger.info("[%s] Estrazione archivio ZIP: %s", source_upper, file_path)
     all_records: list[dict] = []
     with zipfile.ZipFile(file_path, "r") as archive:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -121,6 +124,7 @@ def _extract_zip_file(file_path: str, source_upper: str) -> list[dict]:
                     nested_ext = os.path.splitext(filename)[1].lower()
                     if nested_ext in SUPPORTED_EXTENSIONS:
                         all_records.extend(extract_from_file(nested_path, source_upper))
+    logger.info("[%s] Archivio ZIP elaborato: %s record", source_upper, len(all_records))
     return all_records
 
 
@@ -154,17 +158,19 @@ def extract_from_file(file_path: str, source: str) -> list[dict]:
 
     source_upper = source.upper().strip()
     file_extension = os.path.splitext(file_path)[1].lower()
+    logger.info("[%s] Avvio lettura file: %s", source_upper, file_path)
 
     if file_extension == ".zip":
         return _extract_zip_file(file_path, source_upper)
 
     if file_extension == ".bib":
-        print(f"[{source_upper}] Lettura file BibTeX: {file_path}")
+        logger.info("[%s] Lettura file BibTeX", source_upper)
         records = _read_bibtex_file(file_path)
+        logger.info("[%s] Record estratti da BibTeX: %s", source_upper, len(records))
         return _annotate_records(records, file_extension, source_upper)
 
     if file_extension in {".txt", ".ciw"}:
-        print(f"[{source_upper}] Lettura file testuale: {file_path}")
+        logger.info("[%s] Lettura file testuale %s", source_upper, file_extension)
 
         # Gli export testuali usano convenzioni di tag specifiche per sorgente,
         # quindi vengono inviati ai parser dedicati prima dell'annotazione comune.
@@ -181,19 +187,21 @@ def extract_from_file(file_path: str, source: str) -> list[dict]:
                 f"WEB_OF_SCIENCE e COCHRANE. Ricevuto: {source_upper}"
             )
 
+        logger.info("[%s] Record estratti da file testuale: %s", source_upper, len(records))
         return _annotate_records(records, file_extension, source_upper)
 
     if file_extension in {".csv", ".xlsx", ".xls"}:
-        print(f"[{source_upper}] Lettura file tabellare {file_extension}: {file_path}")
+        logger.info("[%s] Lettura file tabellare %s", source_upper, file_extension)
         try:
             records = _read_tabular_file(file_path, file_extension, source_upper)
         except pd.errors.EmptyDataError:
-            print(f"[ERRORE] Il file '{file_path}' e' vuoto.")
+            logger.error("Il file '%s' e' vuoto.", file_path)
             return []
         except Exception as exc:
-            print(f"[ERRORE] Impossibile leggere il file tabellare: {exc}")
+            logger.exception("Impossibile leggere il file tabellare: %s", exc)
             return []
 
+        logger.info("[%s] Record estratti da file tabellare: %s", source_upper, len(records))
         return _annotate_records(records, file_extension, source_upper)
 
     raise ValueError(

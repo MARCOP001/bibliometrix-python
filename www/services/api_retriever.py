@@ -21,6 +21,7 @@ Risultati su disco:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 import xml.etree.ElementTree as ET
@@ -31,6 +32,8 @@ from urllib.parse import quote_plus
 
 import requests
 from .parsers import parse_pubmed_xml_node
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configurazione globale
@@ -185,33 +188,40 @@ def fetch_data_with_retries(
         wait_time: float = 2 ** attempt
         try:
             preview = url[:90] + ("..." if len(url) > 90 else "")
+            logger.info("Richiesta HTTP: tentativo=%s/%s, url=%s", attempt + 1, max_retries, preview)
             print(f"  -> GET {preview} (tentativo {attempt + 1}/{max_retries})")
             response = requests.get(url, headers=headers, timeout=15)
 
             if response.status_code == 200:
+                logger.info("Richiesta HTTP completata con successo: status=200")
                 return response.json() if response_format == "json" else response.text
 
             if response.status_code == 429:
                 # Priorità all'header Retry-After: il server conosce il proprio
                 # stato meglio di qualsiasi euristica locale di backoff.
                 retry_after = float(response.headers.get("Retry-After", wait_time))
+                logger.warning("Rate limit HTTP 429: attesa=%ss", retry_after)
                 print(f"  -> 429 Rate limit. Attendo {retry_after:.0f}s...")
                 time.sleep(retry_after)
 
             elif response.status_code in (500, 502, 503, 504):
+                logger.warning("Errore server HTTP %s: attesa=%ss", response.status_code, wait_time)
                 print(f"  -> {response.status_code} Errore server. Attendo {wait_time:.0f}s...")
                 time.sleep(wait_time)
 
             else:
                 # Errori 4xx (escluso 429): il problema è nella richiesta stessa,
                 # non nel server, quindi un nuovo tentativo non porterebbe a risultati diversi.
+                logger.error("Errore HTTP non recuperabile: status=%s, risposta=%s", response.status_code, response.text[:120])
                 print(f"  -> Errore {response.status_code}: {response.text[:120]}")
                 return None
 
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            logger.warning("Errore di rete %s: attesa=%ss", type(exc).__name__, wait_time)
             print(f"  -> Errore di rete ({type(exc).__name__}). Attendo {wait_time:.0f}s...")
             time.sleep(wait_time)
 
+    logger.error("Endpoint non raggiungibile dopo %s tentativi", max_retries)
     print("  [FALLIMENTO] Impossibile raggiungere l'endpoint dopo tutti i tentativi.")
     return None
 
@@ -262,7 +272,8 @@ def save_openalex_json(results: List[Dict], output_dir: Path) -> Path:
     filepath = output_dir / f"openalex_{timestamp}.json"
     with open(filepath, "w", encoding="utf-8") as fh:
         json.dump(results, fh, ensure_ascii=False, indent=2)
-    print(f"\n[SALVATAGGIO] OpenAlex JSON → {filepath}  ({len(results)} record)")
+    logger.info("Salvataggio OpenAlex JSON: file=%s, record=%s", filepath, len(results))
+    print(f"\n[SALVATAGGIO] OpenAlex JSON -> {filepath}  ({len(results)} record)")
     return filepath
 
 
@@ -298,7 +309,8 @@ def save_pubmed_xml(articles_xml: List[str], output_dir: Path) -> Path:
     tree = ET.ElementTree(root)
     ET.indent(tree, space="  ")          # Indentazione leggibile (Python >= 3.9)
     tree.write(filepath, encoding="unicode", xml_declaration=True)
-    print(f"[SALVATAGGIO] PubMed XML → {filepath}  ({len(articles_xml)} record)")
+    logger.info("Salvataggio PubMed XML: file=%s, record=%s", filepath, len(articles_xml))
+    print(f"[SALVATAGGIO] PubMed XML -> {filepath}  ({len(articles_xml)} record)")
     return filepath
 
 
@@ -335,7 +347,8 @@ def extract_openalex_data(
         Il file JSON viene salvato su disco come effetto collaterale.
     """
     sep = "=" * 70
-    print(f"\n{sep}\nESTRAZIONE OPENALEX — query: '{query}'\n{sep}")
+    logger.info("Avvio estrazione OpenAlex: query=%s, max_results=%s", query, max_results)
+    print(f"\n{sep}\nESTRAZIONE OPENALEX - query: '{query}'\n{sep}")
 
     all_results: List[Dict] = []
     cursor: str = "*"   # Il cursore "*" indica l'inizio della sequenza paginata
@@ -353,6 +366,13 @@ def extract_openalex_data(
         results: List[Dict] = data["results"]
         all_results.extend(results)
         total_available = data.get("meta", {}).get("count", "?")
+        logger.info(
+            "OpenAlex pagina %s: estratti=%s, totale_accumulato=%s, disponibili=%s",
+            page_num,
+            len(results),
+            len(all_results),
+            total_available,
+        )
         print(
             f"  -> Estratti {len(results)} works "
             f"(totale: {len(all_results)} / {total_available} disponibili)"
@@ -370,8 +390,10 @@ def extract_openalex_data(
     if all_results:
         save_openalex_json(all_results, output_dir)
     else:
+        logger.warning("OpenAlex non ha restituito dati per query=%s", query)
         print("  [ATTENZIONE] Nessun dato estratto. Nessun file salvato.")
 
+    logger.info("Estrazione OpenAlex completata: record=%s", len(all_results))
     return all_results
 
 
@@ -410,7 +432,8 @@ def extract_pubmed_data(
         Il file XML viene salvato su disco come effetto collaterale.
     """
     sep = "=" * 70
-    print(f"\n{sep}\nESTRAZIONE PUBMED — query: '{query}'\n{sep}")
+    logger.info("Avvio estrazione PubMed: query=%s, max_results=%s", query, max_results)
+    print(f"\n{sep}\nESTRAZIONE PUBMED - query: '{query}'\n{sep}")
 
     all_results: List[Dict] = []
     raw_xml_list: List[str] = []   # Usato solo per il salvataggio finale su disco
@@ -459,6 +482,13 @@ def extract_pubmed_data(
 
             batch_parsed = [parse_pubmed_xml_node(art) for art in articles]
             all_results.extend(batch_parsed)
+            logger.info(
+                "PubMed pagina %s: estratti=%s, totale_accumulato=%s, disponibili=%s",
+                page_num,
+                len(batch_parsed),
+                len(all_results),
+                total_available,
+            )
 
             print(
                 f"  -> Estratti {len(batch_parsed)} articoli XML "
@@ -488,8 +518,10 @@ def extract_pubmed_data(
         # max_results record, coerentemente con la lista restituita in memoria.
         save_pubmed_xml(raw_xml_list[:max_results], output_dir)
     else:
+        logger.warning("PubMed non ha restituito dati per query=%s", query)
         print("  [ATTENZIONE] Nessun dato estratto. Nessun file salvato.")
 
+    logger.info("Estrazione PubMed completata: record=%s", len(all_results[:max_results]))
     return all_results[:max_results]
 
 
@@ -528,6 +560,7 @@ def extract_data(
     """
     output_path = Path(output_dir)
     normalized = source.lower().strip()
+    logger.info("Dispatch API: source=%s, query=%s, output_dir=%s", normalized, query, output_path)
 
     dispatch: Dict[str, object] = {
         "openalex": lambda q: extract_openalex_data(q, output_dir=output_path),
@@ -556,4 +589,4 @@ if __name__ == "__main__":
 
     for src in ("openalex", "pubmed"):
         records = extract_data(query_test, source=src)
-        print(f"\n→ {src}: {len(records)} record estratti.\n")
+        print(f"\n-> {src}: {len(records)} record estratti.\n")

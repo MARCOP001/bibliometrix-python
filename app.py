@@ -49,8 +49,10 @@
 # Import necessary libraries for better performance - avoid importing everything
 import tempfile
 import os
+import logging
 import requests
 import functools
+import sys
 from datetime import datetime
 import pandas as pd
 import io
@@ -70,6 +72,25 @@ from shiny.express import ui, input, render
 from www.services.file_extractor import extract_from_file
 from www.services.standardizer import convert2df
 from www.services.api_retriever import extract_data
+
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format=LOG_FORMAT,
+    datefmt=LOG_DATE_FORMAT,
+    stream=sys.stdout,
+    force=True,
+)
+logger = logging.getLogger("bibliometrix.app")
+logger.info("Avvio applicazione Bibliometrix Shiny")
 
 # MODIFICA rispetto alla versione fornita: le tabelle itables ricevono stringhe
 # CSS nel parametro `style`. Usare `width:100%;`, non `width=100%;`, evita
@@ -767,6 +788,11 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                 def mostra():
                     selected_action = input.select()
                     database_raw = input.database() if selected_action == "1A" else "Sample"
+                    logger.info(
+                        "Avvio caricamento dati da interfaccia: azione=%s, database=%s",
+                        selected_action,
+                        database_raw,
+                    )
                     
                     # Nasconde la sidebar
                     ui.update_sidebar("sidebar_load_data", show=False)
@@ -788,9 +814,15 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                     # file grezzi e file gia' standardizzati. I sample sono gia'
                     # pronti per la dashboard, quindi non passano dalla pipeline ETL.
                     if selected_action == "1C": # Dati Sample di Test
+                        logger.info("Caricamento dataset sample: sources/samples/sample.xlsx")
                         sample_data = pd.read_excel("sources/samples/sample.xlsx")
                         df.set(sample_data)
                         reset_all_analyses()
+                        logger.info(
+                            "Dataset sample caricato: righe=%s, colonne=%s",
+                            len(sample_data),
+                            len(sample_data.columns),
+                        )
 
                     # MODIFICA rispetto alla versione fornita: per i file grezzi
                     # usiamo la catena ETL esplicita richiesta:
@@ -798,6 +830,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                     elif selected_action == "1A": # Dati Locali (Base Level)
                         files = input.Dataset()
                         if files:
+                            logger.info("Import raw data: %s file ricevuti", len(files))
                             all_standardized_dfs = []
                             
                             # --- FASE 1, 2, 3: EXTRACT & TRANSFORM PER FILE ---
@@ -806,17 +839,37 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 file_name = file_info["name"]
                                 # Extract the extension to pass to standardizer
                                 file_ext = os.path.splitext(file_name)[1].lower() 
+                                logger.info(
+                                    "Elaborazione file: nome=%s, estensione=%s, sorgente=%s",
+                                    file_name,
+                                    file_ext,
+                                    source_upper,
+                                )
                                 
                                 try:
                                     # Extract raw records from the specific file
                                     raw_records = extract_from_file(file_path, source=source_upper)
+                                    logger.info(
+                                        "Estrazione completata per %s: record_grezzi=%s",
+                                        file_name,
+                                        len(raw_records),
+                                    )
                                     
                                     if raw_records:
                                         # Transform to DF immediately using the specific file_type
                                         df_part = convert2df(raw_records, source=source_upper, file_type=file_ext, validate=True)
                                         all_standardized_dfs.append(df_part)
+                                        logger.info(
+                                            "Standardizzazione completata per %s: righe=%s, colonne=%s",
+                                            file_name,
+                                            len(df_part),
+                                            len(df_part.columns),
+                                        )
+                                    else:
+                                        logger.warning("Nessun record grezzo estratto da %s", file_name)
                                         
                                 except Exception as e:
+                                    logger.exception("Errore durante l'elaborazione del file %s", file_name)
                                     ui.notification_show(f"Errore di elaborazione per ({file_name}): {e}", type="error", duration=8)
 
                             # --- FASE 4: MERGE E LOAD ---
@@ -824,18 +877,31 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 try:
                                     # Combine all standard dataframes into one
                                     standardized_df = pd.concat(all_standardized_dfs, ignore_index=True)
+                                    logger.info(
+                                        "Merge DataFrame standardizzati completato: righe=%s, colonne=%s",
+                                        len(standardized_df),
+                                        len(standardized_df.columns),
+                                    )
                                     
                                     standardized_df = prepare_dataframe_for_app(standardized_df)
+                                    logger.info(
+                                        "Preparazione per dashboard completata: righe_valide=%s",
+                                        len(standardized_df),
+                                    )
                                     
                                     # --- FASE LOAD: Salvataggio nel reattivo Shiny ---
                                     df.set(standardized_df)
                                     reset_all_analyses()
+                                    logger.info("Dataset caricato nello stato reattivo Shiny")
                                     ui.notification_show(f"✅ ETL completato con successo! Elaborati {len(standardized_df)} record.", duration=5)
                                     
                                 except Exception as e:
                                     ui.notification_show(f"❌ Errore durante l'aggregazione dei dati: {e}", type="error", duration=10)
                             else:
+                                logger.warning("Import raw data terminato senza DataFrame standardizzati validi")
                                 ui.notification_show("Nessun record valido trovato nei file caricati.", type="warning", duration=8)
+                        else:
+                            logger.warning("Import raw data richiesto senza file caricati")
 
                     elif selected_action == "1B": # File gia' standardizzati
                         # Anche i file gia' esportati vengono fatti passare da
@@ -843,23 +909,45 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         # mantiene lo stesso contratto usato dalle funzioni.
                         files = input.Dataset()
                         if files:
+                            logger.info("Load Bibliometrix file: %s file ricevuti", len(files))
                             loaded_dfs = []
                             for file_info in files:
                                 try:
+                                    logger.info("Lettura file standardizzato: %s", file_info["name"])
                                     loaded = pd.read_excel(file_info["datapath"])
-                                    loaded_dfs.append(convert2df(loaded.to_dict(orient="records"), source="WEB_OF_SCIENCE", validate=True))
+                                    logger.info(
+                                        "File standardizzato letto: %s righe, %s colonne",
+                                        len(loaded),
+                                        len(loaded.columns),
+                                    )
+                                    df_part = convert2df(loaded.to_dict(orient="records"), source="WEB_OF_SCIENCE", validate=True)
+                                    loaded_dfs.append(df_part)
+                                    logger.info(
+                                        "Validazione file standardizzato completata: %s righe",
+                                        len(df_part),
+                                    )
                                 except Exception as e:
+                                    logger.exception("Errore nel caricamento del file standardizzato %s", file_info["name"])
                                     ui.notification_show(f"Errore nel caricamento di ({file_info['name']}): {e}", type="error", duration=8)
 
                             if loaded_dfs:
                                 try:
                                     standardized_df = pd.concat(loaded_dfs, ignore_index=True)
+                                    logger.info(
+                                        "Merge file standardizzati completato: righe=%s, colonne=%s",
+                                        len(standardized_df),
+                                        len(standardized_df.columns),
+                                    )
                                     standardized_df = prepare_dataframe_for_app(standardized_df)
                                     df.set(standardized_df)
                                     reset_all_analyses()
+                                    logger.info("File Bibliometrix caricato nello stato reattivo Shiny")
                                     ui.notification_show(f"File Bibliometrix caricato: {len(standardized_df)} record.", duration=5)
                                 except Exception as e:
+                                    logger.exception("Errore durante il caricamento dei file standardizzati")
                                     ui.notification_show(f"Errore durante il caricamento: {e}", type="error", duration=10)
+                        else:
+                            logger.warning("Load Bibliometrix richiesto senza file caricati")
                     # -------- ADVICE BUTTON --------
                     @render.ui
                     @reactive.event(input.advice_modal_completeness)
@@ -1013,8 +1101,10 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                 def esegui_pipeline_api():
                     query = input.api_query()
                     source = input.api_source()
+                    logger.info("Avvio pipeline API da interfaccia: source=%s, query=%s", source, query)
                     
                     if not query:
+                        logger.warning("Pipeline API interrotta: query vuota")
                         ui.notification_show("Inserisci una query valida prima di eseguire.", type="warning")
                         return
                         
@@ -1023,8 +1113,14 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                     try:
                         # --- FASE 1: EXTRACT (via API) ---
                         raw_records = extract_data(query=query, source=source)
+                        logger.info(
+                            "Estrazione API completata: source=%s, record_grezzi=%s",
+                            source,
+                            len(raw_records),
+                        )
                         
                         if not raw_records:
+                            logger.warning("Pipeline API senza risultati compatibili: source=%s, query=%s", source, query)
                             ui.notification_show("Nessun risultato compatibile trovato con la query.", type="warning")
                             return
                             
@@ -1037,12 +1133,20 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         # `file_type="api"` evita di fingere che i record live siano
                         # CSV/TXT: la standardizzazione sa che arrivano da API.
                         standardized_df = convert2df(raw_records, source=source_mapped, file_type="api", validate=True)
+                        logger.info(
+                            "Standardizzazione API completata: source=%s, righe=%s, colonne=%s",
+                            source_mapped,
+                            len(standardized_df),
+                            len(standardized_df.columns),
+                        )
                         
                         standardized_df = prepare_dataframe_for_app(standardized_df)
+                        logger.info("Preparazione dashboard per dati API completata: righe_valide=%s", len(standardized_df))
                         
                         # Assegna i dati al DataFrame reattivo
                         df.set(standardized_df)
                         reset_all_analyses()
+                        logger.info("Dataset API caricato nello stato reattivo Shiny")
                         
                       
                         ui.update_navs("hidden_tabs", selected="import")
@@ -1050,6 +1154,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         ui.notification_show(f"✅ Download API completato! Creati e testati {len(standardized_df)} record uniformati.", duration=5)
                         
                     except Exception as e:
+                        logger.exception("Fallimento del processo API")
                         ui.notification_show(f"❌ Fallimento del processo API: {e}", type="error", duration=15)
         with ui.nav_panel("None", value="collections"):
             ui.h3("🚧 Warning: Merge Collection is under construction 🚧")
@@ -2858,7 +2963,12 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         )
                         for i, table in enumerate(context['table']):
                             prompt += f"\nTable {i}: {table.to_json(orient='records')}"
-                        print(f"Prompt for Gemini: {prompt}")
+                        logger.info(
+                            "Richiesta Gemini preparata: pannello=%s, tabelle=%s, caratteri_prompt=%s",
+                            context["panel"],
+                            len(context["table"]),
+                            len(prompt),
+                        )
                         if client is not None:
                             try:
                                 response = client.models.generate_content(

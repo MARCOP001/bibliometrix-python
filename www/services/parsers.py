@@ -8,8 +8,11 @@ La standardizzazione dei
 campi e dei tipi resta responsabilita' di "standardizer.py".
 """
 
+import logging
 import re
 import xml.etree.ElementTree as ET
+
+logger = logging.getLogger(__name__)
 
 
 # PARSER WEB OF SCIENCE 
@@ -34,6 +37,7 @@ def parse_wos_data(datapath: str) -> list[dict]:
     elem_data = []
     data = {}
     current_key = None
+    logger.info("Parsing Web of Science: %s", datapath)
 
     with open(datapath, 'r', encoding='utf-8') as file:
         lines = file.readlines()
@@ -72,6 +76,7 @@ def parse_wos_data(datapath: str) -> list[dict]:
                     data[key] = [value]
                     current_key = key
 
+    logger.info("Parsing Web of Science completato: %s record", len(elem_data))
     return elem_data
 
 
@@ -96,6 +101,7 @@ def parse_cochrane_data(datapath: str) -> list[dict]:
     data = []
     current_record = {}
     current_key = None
+    logger.info("Parsing Cochrane: %s", datapath)
 
     with open(datapath, 'r', encoding='utf-8') as file:
         lines = file.readlines()
@@ -142,6 +148,7 @@ def parse_cochrane_data(datapath: str) -> list[dict]:
             current_record['AB'] = current_record['AB'][22:].strip()
         data.append(current_record)
 
+    logger.info("Parsing Cochrane completato: %s record", len(data))
     return data
 
 
@@ -161,6 +168,7 @@ def parse_pubmed_medline_text(text: str) -> list[dict]:
     records = []
     current_record = {}
     current_key = None
+    logger.info("Parsing PubMed MEDLINE: %s righe", len(text.splitlines()))
 
     for line in text.splitlines():
         if not line.strip():
@@ -197,6 +205,7 @@ def parse_pubmed_medline_text(text: str) -> list[dict]:
     if current_record:
         records.append(current_record)
 
+    logger.info("Parsing PubMed MEDLINE completato: %s record", len(records))
     return records
 
 

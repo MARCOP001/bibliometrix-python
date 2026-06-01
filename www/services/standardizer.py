@@ -11,11 +11,14 @@ L'obiettivo di questo modulo è volutamente semplice:
 
 from __future__ import annotations
 import ast
+import logging
 import re
 from typing import Any
 import pandas as pd
 from . import format_functions as ff
 from .validation import validate_dataframe_contract, validate_record_contract
+
+logger = logging.getLogger(__name__)
 
 # Schema Target e contratti di tipo
 COLUMN_TYPE_CONTRACTS: dict[str, type] = {
@@ -616,11 +619,26 @@ def convert2df(
     Notes:
         I record non rappresentati da dizionari vengono ignorati. Il dispatch sceglie tra ricaricamento standardizzato, mapping OpenAlex e formatter legacy in base ai metadati disponibili.
     """
+    input_count = len(raw_records or [])
     source = source.upper().strip()
     records: list[dict[str, Any]] = []
+    skipped_records = 0
+    standardized_records = 0
+    openalex_records = 0
+    legacy_records = 0
+
+    logger.info(
+        "Avvio standardizzazione: source=%s, file_type=%s, record_input=%s, validate=%s, csv_export=%s",
+        source,
+        file_type,
+        input_count,
+        validate,
+        for_csv_export,
+    )
 
     for raw_record in raw_records or []:
         if not isinstance(raw_record, dict):
+            skipped_records += 1
             continue
 
         record_source = str(raw_record.get("_bibliometrix_source", source)).upper().strip()
@@ -629,18 +647,31 @@ def convert2df(
         # Il dispatch preserva i record gia' standardizzati ed evita passaggi inutili attraverso formatter progettati per dati grezzi.
         if _looks_standardized(raw_record):
             record = transform_standardized_record(raw_record, default_db=record_source)
+            standardized_records += 1
         elif record_source == "OPENALEX":
             record = transform_openalex_record(raw_record)
+            openalex_records += 1
         else:
             record = transform_with_format_functions(raw_record, record_source, effective_file_type)
+            legacy_records += 1
 
         if validate:
             validate_record_contract(record, COLUMN_TYPE_CONTRACTS)
 
         records.append(serialize_for_csv(record) if for_csv_export else record)
 
+    logger.info(
+        "Record trasformati: validi=%s, saltati=%s, gia_standardizzati=%s, openalex=%s, formatter_legacy=%s",
+        len(records),
+        skipped_records,
+        standardized_records,
+        openalex_records,
+        legacy_records,
+    )
+
     column_order = list(COLUMN_TYPE_CONTRACTS)
     if not records:
+        logger.warning("Nessun record valido da standardizzare; restituito DataFrame vuoto")
         return pd.DataFrame(columns=column_order)
 
     df = pd.DataFrame(records)
@@ -653,5 +684,7 @@ def convert2df(
     df = df[column_order]
     if validate and not for_csv_export:
         validate_dataframe_contract(df, COLUMN_TYPE_CONTRACTS)
+        logger.info("Validazione DataFrame completata")
 
+    logger.info("DataFrame standardizzato pronto: righe=%s, colonne=%s", len(df), len(df.columns))
     return df

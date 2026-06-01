@@ -6,8 +6,11 @@ Queste funzioni di supporto mantengono la convalida separata dall'estrazione e d
 """
 
 from __future__ import annotations
+import logging
 from typing import Any
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 class ValidationError(Exception):
@@ -74,6 +77,7 @@ def validate_record_contract(record: dict[str, Any], contracts: dict[str, type])
             )
 
     if errors:
+        logger.error("Validazione record fallita: %s errori", len(errors))
         raise ValidationError("\n".join(errors))
 
 
@@ -113,4 +117,5 @@ def validate_dataframe_contract(df: pd.DataFrame, contracts: dict[str, type]) ->
                 )
 
     if errors:
+        logger.error("Validazione DataFrame fallita: %s errori", len(errors))
         raise ValidationError("\n".join(errors[:25]))

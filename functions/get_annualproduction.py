@@ -1,4 +1,44 @@
-from www.services import *
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+
+
+def _resolve_dataframe(df):
+    """Accept both a Shiny reactive value and a plain pandas DataFrame."""
+    if isinstance(df, pd.DataFrame):
+        data = df
+    elif hasattr(df, "get"):
+        data = df.get()
+    else:
+        data = df
+
+    if data is None:
+        raise ValueError("get_annual_production requires a non-empty DataFrame.")
+    if not isinstance(data, pd.DataFrame):
+        raise TypeError("get_annual_production expects a pandas DataFrame or an object with .get().")
+    return data.copy()
+
+
+def _annual_publications_table(data):
+    if "PY" not in data.columns:
+        raise ValueError("Missing required column: PY.")
+
+    years = pd.to_numeric(data["PY"], errors="coerce").dropna().astype(int)
+    if years.empty:
+        raise ValueError("Column PY does not contain valid publication years.")
+
+    publications_per_year = years.value_counts().sort_index().reset_index()
+    publications_per_year.columns = ["Year", "Freq"]
+
+    min_year = int(publications_per_year["Year"].min())
+    max_year = int(publications_per_year["Year"].max())
+    all_years = pd.DataFrame({"Year": range(min_year, max_year + 1)})
+
+    publications_per_year = all_years.merge(
+        publications_per_year, on="Year", how="left"
+    ).fillna({"Freq": 0})
+    publications_per_year["Freq"] = publications_per_year["Freq"].astype(int)
+    return publications_per_year
 
 
 def get_annual_production(df):
@@ -6,24 +46,13 @@ def get_annual_production(df):
     Generate a plot of annual scientific production.
     
     Args:
-        df: A DataFrame object containing the data.
+        df: A pandas DataFrame or a Shiny reactive value containing the data.
         
     Returns:
-        A Plotly figure object representing the annual scientific production.
+        A Plotly figure object and a DataFrame with annual publication counts.
     """
-    data = df.get()
-
-    # Calculate the number of publications per year
-    publications_per_year = data["PY"].value_counts().sort_index().reset_index()
-    publications_per_year.columns = ["Year", "Freq"]
-
-    # Find the range of years
-    min_year = publications_per_year["Year"].min()
-    max_year = publications_per_year["Year"].max()
-
-    # Ensure all years in the range are present
-    all_years = pd.DataFrame({"Year": range(min_year, max_year + 1)})
-    publications_per_year = all_years.merge(publications_per_year, on="Year", how="left").fillna(0)
+    data = _resolve_dataframe(df)
+    publications_per_year = _annual_publications_table(data)
 
     # Create the plot
     fig = px.line(

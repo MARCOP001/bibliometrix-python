@@ -1,0 +1,31 @@
+Standardization Contract Report
+Rows: 1000
+Columns: 24
+Missing required columns: none
+Type errors: none
+
+Column types expected by the ETL contract:
+- DB: str (present)
+- UT: str (present)
+- DI: str (present)
+- PMID: str (present)
+- TI: str (present)
+- SO: str (present)
+- JI: str (present)
+- PY: str (present)
+- DT: str (present)
+- LA: str (present)
+- RP: str (present)
+- AB: str (present)
+- VL: str (present)
+- IS: str (present)
+- BP: str (present)
+- EP: str (present)
+- SR: str (present)
+- TC: int (present)
+- AU: list (present)
+- AF: list (present)
+- C1: list (present)
+- CR: list (present)
+- DE: list (present)
+- ID: list (present)

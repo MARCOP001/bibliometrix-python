@@ -1,4 +1,22 @@
-from www.services import *
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+
+
+def _resolve_dataframe(df):
+    """Accept both a Shiny reactive value and a plain pandas DataFrame."""
+    if isinstance(df, pd.DataFrame):
+        data = df
+    elif hasattr(df, "get"):
+        data = df.get()
+    else:
+        data = df
+
+    if data is None:
+        raise ValueError("get_lotka_law requires a non-empty DataFrame.")
+    if not isinstance(data, pd.DataFrame):
+        raise TypeError("get_lotka_law expects a pandas DataFrame or an object with .get().")
+    return data.copy()
 
 
 def get_lotka_law(df):
@@ -14,19 +32,34 @@ def get_lotka_law(df):
     """
     
     # Calculate Lotka's Law
-    data = df.get()
+    data = _resolve_dataframe(df)
+
+    if "AU" not in data.columns:
+        raise ValueError("Missing required column: AU.")
+
+    data = data.dropna(subset=["AU"]).copy()
+    data["AU"] = data["AU"].apply(lambda x: x if isinstance(x, list) else [])
+    data = data[data["AU"].apply(len) > 0].copy()
+    if data.empty:
+        raise ValueError("Column AU does not contain valid author lists.")
     
     # Author Productivity (Lotka's Law)
-    authors = pd.Series([author.strip() for sublist in data['AU'] for author in sublist])
+    authors = pd.Series([author.strip() for sublist in data['AU'] for author in sublist if author])
+    if authors.empty:
+        raise ValueError("Column AU does not contain valid author names.")
+
     author_prod = authors.value_counts().reset_index()
     author_prod.columns = ['Author', 'N.Articles']
     author_prod = author_prod.groupby('N.Articles').size().reset_index(name='N.Authors')
     author_prod['Freq'] = author_prod['N.Authors'] / author_prod['N.Authors'].sum()
     
     # Calculate theoretical values
-    lotka_law = np.polyfit(np.log10(author_prod['N.Articles']), np.log10(author_prod['Freq']), 1)
-    author_prod['Theoretical'] = 10**(lotka_law[1] - 2 * np.log10(author_prod['N.Articles']))
-    author_prod['Theoretical'] = author_prod['Theoretical'] / author_prod['Theoretical'].sum()
+    if len(author_prod) > 1:
+        lotka_law = np.polyfit(np.log10(author_prod['N.Articles']), np.log10(author_prod['Freq']), 1)
+        author_prod['Theoretical'] = 10**(lotka_law[1] - 2 * np.log10(author_prod['N.Articles']))
+        author_prod['Theoretical'] = author_prod['Theoretical'] / author_prod['Theoretical'].sum()
+    else:
+        author_prod['Theoretical'] = 1.0
     
     # Create the plot with improved hover
     fig = go.Figure()

@@ -1,4 +1,22 @@
-from www.services import *
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+
+
+def _resolve_dataframe(df):
+    """Accept both a Shiny reactive value and a plain pandas DataFrame."""
+    if isinstance(df, pd.DataFrame):
+        data = df
+    elif hasattr(df, "get"):
+        data = df.get()
+    else:
+        data = df
+
+    if data is None:
+        raise ValueError("get_bradford_law requires a non-empty DataFrame.")
+    if not isinstance(data, pd.DataFrame):
+        raise TypeError("get_bradford_law expects a pandas DataFrame or an object with .get().")
+    return data.copy()
 
 
 def get_bradford_law(df):
@@ -12,7 +30,16 @@ def get_bradford_law(df):
         A Plotly figure object and a DataFrame of the Bradford's Law zones.
     """
     # Sort data by frequency of occurrence (equivalent to R's sort(table(M$SO), decreasing = TRUE))
-    data = df.get()
+    data = _resolve_dataframe(df)
+
+    if "SO" not in data.columns:
+        raise ValueError("Missing required column: SO.")
+
+    data = data.dropna(subset=["SO"]).copy()
+    data = data[data["SO"].astype(str).str.strip() != ""]
+    if data.empty:
+        raise ValueError("Column SO does not contain valid source names.")
+
     source_counts = data["SO"].value_counts()
     
     # Total number of sources
@@ -22,7 +49,7 @@ def get_bradford_law(df):
     
     # Define the cut points for Bradford's Law (zones)
     cutpoints = [1, n * 0.33, n * 0.67, float('inf')]
-    groups = pd.cut(cumSO, bins=cutpoints, labels=["Zone 1", "Zone 2", "Zone 3"])
+    _ = pd.cut(cumSO, bins=cutpoints, labels=["Zone 1", "Zone 2", "Zone 3"])
     
     # Find the cut points for "Core" sources
     a = (cumSO < n * 0.33).sum() + 1
@@ -67,7 +94,7 @@ def get_bradford_law(df):
     fig.add_shape(
         type="rect",
         x0=0,
-        x1=np.log(df_bradford["Rank"][a]),
+        x1=np.log(df_bradford["Rank"].iloc[min(a - 1, len(df_bradford) - 1)]),
         y0=0,
         y1=df_bradford["Freq"].max(),
         fillcolor="#B3D1F2",
@@ -78,7 +105,7 @@ def get_bradford_law(df):
 
     # Add the "Core Sources" annotation with smaller font
     fig.add_annotation(
-        x=np.log(df_bradford["Rank"][a]) / 2,
+        x=np.log(df_bradford["Rank"].iloc[min(a - 1, len(df_bradford) - 1)]) / 2,
         y=df_bradford["Freq"].max() * 0.85,
         text="<b>Core<br>Sources</b>",
         showarrow=False,

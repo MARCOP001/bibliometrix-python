@@ -1,17 +1,35 @@
+"""
+Parser per convertire export bibliografici grezzi in dizionari intermedi.
+
+I parser di questo modulo leggono formati specifici delle sorgenti esterne
+senza applicare lo schema finale dell'applicazione. 
+
+La standardizzazione dei
+campi e dei tipi resta responsabilita' di "standardizer.py".
+"""
+
 import re
 import xml.etree.ElementTree as ET
 
 
-# WEB OF SCIENCE PARSER
-def parse_wos_data(datapath: str) -> list[dict]:  
-    """
-    Legge un file di esportazione testuale da Web of Science (.txt o .ciw) 
-    e lo converte in una lista di dizionari.
-    
+# PARSER WEB OF SCIENCE 
+def parse_wos_data(datapath: str) -> list[dict]:
+    """Legge un export testuale Web of Science e lo converte in record grezzi.
+
     Args:
-        datapath (str): Il percorso del file grezzo nel sistema.
+        datapath: Percorso del file Web of Science in formato ".txt" o ".ciw".
+
     Returns:
-        list[dict]: Una lista dove ogni elemento rappresenta un articolo.
+        Lista di dizionari, uno per articolo. I valori sono mantenuti come liste di stringhe per rappresentare correttamente campi ripetuti o multilinea.
+
+    Raises:
+        FileNotFoundError: Se "datapath" non esiste.
+        OSError: Se il file non puo' essere aperto o letto.
+        UnicodeDecodeError: Se il contenuto non e' decodificabile in UTF-8.
+
+    Notes:
+        Il parser riconosce "ER" come fine record, "EF" come fine file e le righe indentate come continuazioni del campo precedente. 
+        Non effettua conversioni verso lo schema Bibliometrix finale.
     """
     elem_data = []
     data = {}
@@ -20,35 +38,34 @@ def parse_wos_data(datapath: str) -> list[dict]:
     with open(datapath, 'r', encoding='utf-8') as file:
         lines = file.readlines()
 
-    # Ignoriamo le prime due righe (lines[2:]) perché in WoS di solito contengono intestazioni di sistema e non i dati dell'articolo.
+    # Le prime righe degli export WoS contengono metadati del file, non campi bibliografici dell'articolo.
     for line in lines[2:]:
-        line = line.rstrip() # Rimuoviamo gli spazi vuoti a fine riga
-        
-        # Ignoriamo le righe vuote e il tag "EF" (End of File, fine del documento)
+        line = line.rstrip()
+
+        # EF chiude l'export completo e non appartiene ad alcun record.
         if line.strip() != "" and line.strip() != "EF":
-            
-            # "ER" sta per End Record. Indica che l'articolo corrente è finito.
+
+            # ER segnala che il record corrente e' completo e puo' essere salvato.
             if line.startswith("ER"):
                 if data:
-                    elem_data.append(data.copy()) # Salviamo una copia del record completato
+                    elem_data.append(data.copy())
                 current_key = None
-                data = {} # Svuotiamo il dizionario per il prossimo articolo
-                
-            # In WoS, se una riga inizia con due spazi, non è una nuova chiave ma la continuazione del testo della chiave precedente.
+                data = {}
+
+            # Le righe indentate continuano il campo precedente secondo il formato testuale WoS.
             elif line.startswith("  "):
                 if current_key and current_key in data:
-                    # Alcuni campi (es. DE: Keywords, AB: Abstract) hanno più senso come unica stringa di testo. Li uniamo separandoli da uno spazio.
+                    # Questi campi rappresentano testo descrittivo continuo: unirli evita di frammentare abstract, keyword o categorie.
                     if current_key in {"DE", "C3", "EM", "FU", "FX", "WC"}:
                         current_value = " ".join(data[current_key]) + " " + line.strip()
                         data[current_key] = [current_value]
-                    # Altri campi (es. AU: Autori) hanno più senso come liste separate.
                     else:
+                        # I campi ripetibili restano liste per non perdere la separazione tra autori, riferimenti o valori analoghi.
                         data[current_key].append(line.strip())
-                        
-            # Se non è ER e non inizia con due spazi, è una nuova etichetta (es. "TI Titolo")
+
             else:
                 line = line.strip()
-                # Dividiamo la riga solo al primo spazio: a sinistra la chiave, a destra il valore
+                # La separazione sul primo spazio preserva eventuali spazi nel valore del campo, ad esempio nei titoli.
                 key_value = line.split(" ", 1)
                 if len(key_value) == 2:
                     key, value = key_value
@@ -58,60 +75,66 @@ def parse_wos_data(datapath: str) -> list[dict]:
     return elem_data
 
 
-# COCHRANE PARSER 
+# PARSER COCHRANE 
 def parse_cochrane_data(datapath: str) -> list[dict]:
-    """
-    Legge un file di testo esportato dalla Cochrane Library 
-    e lo converte in una lista di dizionari.
-    
+    """Legge un export Cochrane Library e lo converte in record grezzi.
+
     Args:
-        datapath (str): Il percorso del file grezzo nel sistema.
+        datapath: Percorso del file testuale esportato da Cochrane Library.
+
     Returns:
-        list[dict]: Una lista di articoli.
+        Lista di dizionari, uno per record bibliografico, con valori testuali aggregati per tag.
+
+    Raises:
+        FileNotFoundError: Se "datapath" non esiste.
+        OSError: Se il file non puo' essere aperto o letto.
+        UnicodeDecodeError: Se il contenuto non e' decodificabile in UTF-8.
+
+    Notes:
+        Le righe "Record #" e le righe vuote delimitano i record. Le chiavi ripetute vengono concatenate con "; " per restare compatibili con i formatter downstream.
     """
     data = []
     current_record = {}
-    current_key = None # Traccia l'ultima chiave letta per gestire i testi su più righe
-    
+    current_key = None
+
     with open(datapath, 'r', encoding='utf-8') as file:
         lines = file.readlines()
-    
+
     for line in lines:
         line = line.strip()
-        
-        # Un nuovo record inizia o dopo una riga vuota o con il tag "Record #"
+
+        # In Cochrane un record termina prima di una riga vuota o del successivo identificatore "Record #".
         if not line or line.startswith('Record #'):
             if current_record:
-                # Fase di pulizia prima del salvataggio:
-                # Rimuoviamo la chiave interna 'Record' perché è inutile ai fini dell'analisi
+                # Il campo Record e' un identificatore interno dell'export, non un metadato bibliografico usato dalle analisi.
                 if 'Record' in current_record:
                     del current_record['Record']
-                # Puliamo l'intestazione fissa 'Abstract - Background' per avere solo il testo
+                # Cochrane antepone questa intestazione fissa al testo dell'abstract; rimuoverla evita rumore nelle analisi testuali.
                 if 'AB' in current_record and current_record['AB'].startswith('Abstract - Background'):
                     current_record['AB'] = current_record['AB'][22:].strip()
-                
+
                 data.append(current_record)
                 current_record = {}
                 current_key = None
             continue
 
-        # Regex: Cerca all'inizio riga (^) almeno 2 lettere maiuscole ([A-Z]{2,}), seguite da due punti (:), ed estrae il resto della riga (.+). Es: "AU: Rossi M"
+        # I tag Cochrane sono formati da almeno due lettere maiuscole seguite da due punti, ad esempio "AU: Rossi M".
         key_match = re.match(r'^([A-Z]{2,})\s*:\s*(.+)', line)
         if key_match:
             current_key = key_match.group(1)
             value = key_match.group(2)
-            
-            # Se la chiave esiste già (es. autori multipli), accodiamo il nuovo valore con un punto e virgola
+
+            # I tag ripetuti vengono serializzati con lo stesso delimitatore usato dai formatter per i campi multivalore.
             if current_key in current_record:
                 current_record[current_key] += '; ' + value
             else:
                 current_record[current_key] = value
         else:
-            # Se la regex non trova una corrispondenza (es. non ci sono i due punti), assumiamo che sia il proseguimento del testo della riga precedente
+            # Una riga senza tag prosegue il contenuto del campo precedente, tipicamente abstract o note descrittive.
             if current_record and current_key and current_key in current_record:
                 current_record[current_key] += ' ' + line.strip()
 
-    # Se il file finisce senza una riga vuota, ci assicuriamo di salvare l'ultimo record pendente
+    # Gestisce export che terminano senza separatore dopo l'ultimo record.
     if current_record:
         if 'Record' in current_record:
             del current_record['Record']
@@ -122,17 +145,18 @@ def parse_cochrane_data(datapath: str) -> list[dict]:
     return data
 
 
-
-# PUBMED PARSER (MEDLINE TEXT)
+# PARSER PUBMED (Testo MEDLINE)
 def parse_pubmed_medline_text(text: str) -> list[dict]:
-    """
-    Elabora un blocco di testo in formato MEDLINE (standard PubMed).
-    Gestisce dinamicamente i campi ripetuti creando liste in automatico.
-    
+    """Elabora testo MEDLINE PubMed e produce record grezzi per articolo.
+
     Args:
-        text (str): L'intero contenuto del file MEDLINE come singola stringa.
+        text: Contenuto completo del file MEDLINE come singola stringa.
+
     Returns:
-        list[dict]: Una lista di articoli.
+        Lista di dizionari. I campi ripetuti vengono convertiti in liste, mentre i campi presenti una sola volta restano stringhe.
+
+    Notes:
+        "PMID-" viene interpretato come inizio di un nuovo record. Le righe con sei spazi iniziali continuano il campo precedente, come previsto dal formato MEDLINE.
     """
     records = []
     current_record = {}
@@ -142,100 +166,101 @@ def parse_pubmed_medline_text(text: str) -> list[dict]:
         if not line.strip():
             continue
 
-        # "PMID-" indica l'inizio di un nuovo articolo.
+        # PMID apre un nuovo record; quello precedente e' completo quando esiste.
         if line.startswith("PMID-"):
             if current_record:
                 records.append(current_record)
             current_record = {}
 
-        # Il formato Medline standard usa 4 caratteri per l'etichetta, seguiti da "- " 
-        # Esempio: "TI  - Titolo dell'articolo"
+        # MEDLINE usa una label a quattro caratteri seguita da "- ".
         if len(line) > 6 and line[4:6] == "- ":
             current_key = line[:4].strip()
             value = line[6:].strip()
 
             if current_key in current_record:
-                # Se la chiave c'è già ed è una lista, facciamo semplicemente un append
                 if isinstance(current_record[current_key], list):
                     current_record[current_key].append(value)
-                # Se c'è già ma è una stringa singola, la convertiamo al volo in una lista
                 else:
+                    # Il primo duplicato stabilisce che il campo e' multivalore.
                     current_record[current_key] = [current_record[current_key], value]
             else:
-                # Se è la prima volta che incontriamo questa chiave, la salviamo come stringa
                 current_record[current_key] = value
 
-        # In Medline, le righe che iniziano con 6 spazi indicano la continuazione del campo precedente
         elif current_key and line.startswith("      "):
             if isinstance(current_record[current_key], list):
-                # Se è una lista (es. un autore diviso su più righe), accodiamo la stringa all'ultimo elemento
+                # La continuazione appartiene all'ultimo valore del campo ripetuto, non a un nuovo elemento della lista.
                 current_record[current_key][-1] += " " + line.strip()
             else:
-                # Se è una stringa singola, la concateniamo
                 current_record[current_key] += " " + line.strip()
 
-    # Salvataggio dell'ultimo record a fine ciclo
+    # Il formato non richiede un marker esplicito di chiusura a fine file.
     if current_record:
         records.append(current_record)
 
     return records
 
 
-
-# PUBMED PARSER (XML)
+# PARSER PUBMED (XML)
 def parse_pubmed_xml_node(article_node: ET.Element) -> dict:
-    """
-    Estrae i dati da un singolo nodo <PubmedArticle> dell'albero XML
-    e lo traduce in un dizionario compatibile con la nomenclatura Medline 
-    (es. trasforma <ArticleTitle> in 'TI').
-    
+    """Estrae un nodo XML PubMed in un dizionario compatibile con MEDLINE.
+
     Args:
-        article_node (ET.Element): Nodo XML rappresentante un singolo articolo.
+        article_node: Nodo "PubmedArticle" dell'albero XML PubMed.
+
     Returns:
-        dict: Dizionario strutturato dell'articolo.
+        Dizionario con tag in stile MEDLINE, ad esempio "TI" per il titolo, "AU" per gli autori e "AB" per l'abstract.
+
+    Notes:
+        Il parser legge solo i campi usati dalla pipeline downstream. 
+        I valori assenti vengono omessi o sostituiti con stringa vuota tramite helper locale, senza validare lo schema finale.
     """
     record = {}
 
-    # Funzione Helper: previene errori se il nodo XML è mancante.
-    # Se il percorso XPath esiste estrae il testo, altrimenti restituisce la stringa vuota di default.
     def get_text(xpath: str, default: str = "") -> str:
+        """Restituisce il testo di un nodo XML o un fallback sicuro.
+
+        Args:
+            xpath: Percorso XPath relativo a "article_node".
+            default: Valore da restituire quando il nodo o il testo mancano.
+
+        Returns:
+            Testo del nodo senza spazi esterni, oppure "default".
+
+        Notes:
+            L'helper evita controlli ripetuti sui nodi opzionali del formato PubMed XML.
+        """
         node = article_node.find(xpath)
         return node.text.strip() if node is not None and node.text else default
 
-    # Estrazione Dati Base
+    # Campi bibliografici principali mappati sulla nomenclatura MEDLINE.
     record["PMID"] = get_text(".//MedlineCitation/PMID")
     record["TI"] = get_text(".//ArticleTitle")  # Title
     record["JT"] = get_text(".//Journal/Title") # Journal Title
     record["TA"] = get_text(".//Journal/ISOAbbreviation")
-    
-    # Gestione Data di Pubblicazione
+
     pub_date_year = get_text(".//PubDate/Year")
     if not pub_date_year:
-        # Se non c'è l'anno esatto, spesso PubMed usa una 'MedlineDate' (es. "2023 Jan-Feb"). 
-        # Ne estraiamo i primi 4 caratteri.
+        # PubMed usa MedlineDate quando non espone un anno strutturato.
         pub_date_year = get_text(".//PubDate/MedlineDate")[:4]
-    record["DP"] = pub_date_year # Date of Publication
-    
+    record["DP"] = pub_date_year # Data di pubblicazione
+
     record["VI"] = get_text(".//JournalIssue/Volume")
     record["IP"] = get_text(".//JournalIssue/Issue")
-    record["PG"] = get_text(".//Pagination/MedlinePgn") # Pages
+    record["PG"] = get_text(".//Pagination/MedlinePgn") 
     record["LA"] = get_text(".//Language")
 
-    # Estrazione Abstract
-    # Un abstract può essere diviso in più nodi (es. <AbstractText Label="METHODS">, <AbstractText Label="RESULTS">)
+    # Gli abstract PubMed possono essere segmentati in piu' sezioni etichettate.
     abstract_texts = article_node.findall(".//AbstractText")
     if abstract_texts:
         record["AB"] = " ".join([node.text.strip() for node in abstract_texts if node.text])
 
-    # Estrazione DOI
     doi_node = article_node.find(".//ArticleId[@IdType='doi']")
     if doi_node is not None and doi_node.text:
         record["LID"] = f"{doi_node.text} [doi]" # Formattato secondo lo standard Medline
 
-    # Estrazione Autori e Affiliazioni
-    au_list = []      # Autori (Formato breve, es. "Rossi M")
-    fau_list = []     # Autori (Full name, es. "Rossi, Mario")
-    affiliations = set() # Usiamo un Set per evitare di registrare doppioni della stessa università
+    au_list = []
+    fau_list = []
+    affiliations = set()
 
     for author in article_node.findall(".//Author"):
         last_name = author.find("LastName")
@@ -250,7 +275,7 @@ def parse_pubmed_xml_node(article_node: ET.Element) -> dict:
             au_list.append(f"{ln} {init}".strip())
             fau_list.append(f"{ln}, {fn}".strip())
 
-        # Cerchiamo l'affiliazione legata a questo specifico autore
+        # Il set mantiene una sola copia delle affiliazioni duplicate tra autori.
         affil = author.find(".//Affiliation")
         if affil is not None and affil.text:
             affiliations.add(affil.text)
@@ -259,7 +284,6 @@ def parse_pubmed_xml_node(article_node: ET.Element) -> dict:
     if fau_list: record["FAU"] = fau_list
     if affiliations: record["AD"] = list(affiliations)
 
-    # Keyword e Tipi di Pubblicazione
     keywords = article_node.findall(".//Keyword")
     if keywords:
         record["OT"] = [k.text for k in keywords if k.text] # OT = Other Terms (Keywords)

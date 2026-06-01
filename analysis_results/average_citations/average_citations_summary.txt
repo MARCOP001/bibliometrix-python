@@ -1,0 +1,5 @@
+Average Citations Analysis
+Documents with valid year: 1000
+Year range: 2024-2025
+Highest mean citations/year: 2024 (0.01)
+Highest mean citations/article: 2024 (0.02)

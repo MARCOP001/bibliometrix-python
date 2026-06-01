@@ -1,4 +1,21 @@
-from www.services import *
+import pandas as pd
+import plotly.graph_objects as go
+
+
+def _resolve_dataframe(df):
+    """Accept both a Shiny reactive value and a plain pandas DataFrame."""
+    if isinstance(df, pd.DataFrame):
+        data = df
+    elif hasattr(df, "get"):
+        data = df.get()
+    else:
+        data = df
+
+    if data is None:
+        raise ValueError("get_relevant_sources requires a non-empty DataFrame.")
+    if not isinstance(data, pd.DataFrame):
+        raise TypeError("get_relevant_sources expects a pandas DataFrame or an object with .get().")
+    return data.copy()
 
 
 def get_relevant_sources(df, num_of_sources):
@@ -12,10 +29,16 @@ def get_relevant_sources(df, num_of_sources):
     Returns:
         A Plotly figure object and a DataFrame of the most relevant sources.
     """
-    data = df.get()
+    data = _resolve_dataframe(df)
+
+    if "SO" not in data.columns:
+        raise ValueError("Missing required column: SO.")
 
     # Drop rows with missing values
     data = data.dropna(subset=["SO"])
+    data = data[data["SO"].astype(str).str.strip() != ""]
+    if data.empty:
+        raise ValueError("Column SO does not contain valid source names.")
 
     # Count the occurrences of each source
     source_counts = data["SO"].value_counts().reset_index()
@@ -27,7 +50,7 @@ def get_relevant_sources(df, num_of_sources):
     # Limit the number of sources to display
     if num_of_sources > len(source_counts):
         num_of_sources = len(source_counts)
-    source_counts = source_counts.head(num_of_sources)
+    source_counts = source_counts.head(num_of_sources).copy()
 
     # Truncate long source names and add line breaks every 50 characters
     def wrap_label(label, width=50):

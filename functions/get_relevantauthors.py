@@ -1,4 +1,32 @@
-from www.services import *
+import pandas as pd
+import plotly.graph_objects as go
+
+
+FREQUENCY_LABELS = {
+    "n_docs": "N. of Documents",
+    "percentage": "Percentage",
+    "freq_measure": "Fractionalized Frequency",
+}
+
+
+def _resolve_dataframe(df):
+    """Accept both a Shiny reactive value and a plain pandas DataFrame."""
+    if isinstance(df, pd.DataFrame):
+        data = df
+    elif hasattr(df, "get"):
+        data = df.get()
+    else:
+        data = df
+
+    if data is None:
+        raise ValueError("get_relevant_authors requires a non-empty DataFrame.")
+    if not isinstance(data, pd.DataFrame):
+        raise TypeError("get_relevant_authors expects a pandas DataFrame or an object with .get().")
+    return data.copy()
+
+
+def _normalize_frequency(frequency):
+    return FREQUENCY_LABELS.get(frequency, frequency)
 
 
 def get_relevant_authors(df, num_of_authors, frequency="N. of Documents"):
@@ -13,27 +41,34 @@ def get_relevant_authors(df, num_of_authors, frequency="N. of Documents"):
     Returns:
         A Plotly figure object and a DataFrame of the most relevant authors.
     """
-    data = df.get()
+    data = _resolve_dataframe(df)
+    frequency = _normalize_frequency(frequency)
+
+    if "AU" not in data.columns:
+        raise ValueError("Missing required column: AU.")
 
     # Drop rows with missing values
-    data = data.dropna(subset=["AU"])
+    data = data.dropna(subset=["AU"]).copy()
 
     # Ensure all values in the "AU" column are lists
     data["AU"] = data["AU"].apply(lambda x: x if isinstance(x, list) else [])
+    data = data[data["AU"].apply(len) > 0].copy()
+    if data.empty:
+        raise ValueError("Column AU does not contain valid author lists.")
 
     # Flatten the list of authors and calculate occurrences
     all_authors = [author for sublist in data["AU"] for author in sublist]
     author_counts = pd.Series(all_authors).value_counts()
 
     # Apply the selected frequency calculation
-    if frequency == "percentage":
+    if frequency == "Percentage":
         author_counts = (author_counts / len(data) * 100).round(1)
-    elif frequency == "freq_measure":
+    elif frequency == "Fractionalized Frequency":
         # Calculate fractional counts
         fractional_counts = data["AU"].apply(lambda authors: 1 / len(authors) if authors else 0)
         fractional_authors = [
-            (author, fractional_counts[i])
-            for i, authors in enumerate(data["AU"])
+            (author, weight)
+            for authors, weight in zip(data["AU"], fractional_counts)
             for author in authors
         ]
         fractional_df = pd.DataFrame(fractional_authors, columns=["Author", "Weight"])
@@ -49,7 +84,7 @@ def get_relevant_authors(df, num_of_authors, frequency="N. of Documents"):
     # Limit the number of authors to display
     if num_of_authors > len(author_counts):
         num_of_authors = len(author_counts)
-    author_counts = author_counts.head(num_of_authors)
+    author_counts = author_counts.head(num_of_authors).copy()
 
     # Create the plot (use scatter instead of scatter with orientation='h')
     fig = go.Figure()

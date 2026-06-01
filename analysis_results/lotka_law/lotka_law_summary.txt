@@ -1,0 +1,7 @@
+Lotka Law Analysis
+Unique authors: 6427
+Maximum articles by one author: 13
+Authors with one article: 6113
+Authors with one article share: 95.11%
+Observed frequency sum: 1.0
+Theoretical frequency sum: 1.0

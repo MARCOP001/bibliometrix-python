@@ -1,0 +1,4 @@
+Annual Production Analysis
+Documents with valid year: 1000
+Year range: 2024-2025
+Peak year: 2024 (999 documents)

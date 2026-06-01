@@ -1,4 +1,22 @@
-from www.services import *
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+
+
+def _resolve_dataframe(df):
+    """Accept both a Shiny reactive value and a plain pandas DataFrame."""
+    if isinstance(df, pd.DataFrame):
+        data = df
+    elif hasattr(df, "get"):
+        data = df.get()
+    else:
+        data = df
+
+    if data is None:
+        raise ValueError("get_average_citations requires a non-empty DataFrame.")
+    if not isinstance(data, pd.DataFrame):
+        raise TypeError("get_average_citations expects a pandas DataFrame or an object with .get().")
+    return data.copy()
 
 
 def get_average_citations(df):
@@ -11,7 +29,19 @@ def get_average_citations(df):
     Returns:
         A Plotly figure object representing the average citations per year.
     """
-    data = df.get()
+    data = _resolve_dataframe(df)
+
+    required_columns = {"PY", "TC"}
+    missing_columns = required_columns.difference(data.columns)
+    if missing_columns:
+        raise ValueError(f"Missing required columns: {', '.join(sorted(missing_columns))}.")
+
+    data["PY"] = pd.to_numeric(data["PY"], errors="coerce")
+    data["TC"] = pd.to_numeric(data["TC"], errors="coerce").fillna(0)
+    data = data.dropna(subset=["PY"]).copy()
+    if data.empty:
+        raise ValueError("Column PY does not contain valid publication years.")
+    data["PY"] = data["PY"].astype(int)
 
     # Calculate the current year
     current_year = pd.Timestamp.now().year + 1

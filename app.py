@@ -1337,7 +1337,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         data['Average_Citations_per_Doc'][0]
                                     ]
                                 })
-                                return ui.HTML(DT(df_box, style="width=100%;"))
+                                return ui.HTML(DT(df_box, style="width:100%;"))
         
         # --- Annual Scientific Production Section ---
         with ui.nav_panel("None", value="annual_scientific_production"):
@@ -1391,7 +1391,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         @render.ui
                         def table_annual_production():
                             _, publications_per_year = annual_informations()
-                            return ui.HTML(DT(publications_per_year, style="width=100%;"))
+                            return ui.HTML(DT(publications_per_year, style="width:100%;"))
 
             # AI bot Gemini Chat Integration
             # --- Floating Chat Button ---
@@ -1545,7 +1545,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         @render.ui
                         def table_average_citations():
                             _, avg_citations = average_citations()
-                            return ui.HTML(DT(avg_citations, style="width=100%;"))
+                            return ui.HTML(DT(avg_citations, style="width:100%;"))
         
         # --- Three-Field Plot Section ---
         with ui.nav_panel("None", value="three_field_plot"):
@@ -1799,7 +1799,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, relevant_sources_tab = result
-                                return ui.HTML(DT(relevant_sources_tab, style="width=100%;"))
+                                return ui.HTML(DT(relevant_sources_tab, style="width:100%;"))
         
         # --- Most Local Cited Sources Section ---
         with ui.nav_panel("None", value="most_local_cited_sources"):
@@ -1943,7 +1943,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, local_cited_sources_tab = result
-                                return ui.HTML(DT(local_cited_sources_tab, style="width=100%;"))
+                                return ui.HTML(DT(local_cited_sources_tab, style="width:100%;"))
         
         # --- Bradford's Law Section ---
         with ui.nav_panel("None", value="bradfords_law"):
@@ -1997,7 +1997,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         @render.ui
                         def table_bradford_law():
                             _, bradford_law_tab = bradford_law()
-                            return ui.HTML(DT(bradford_law_tab, style="width=100%;"))
+                            return ui.HTML(DT(bradford_law_tab, style="width:100%;"))
         
         # --- Sources' Local Impact Section ---
         with ui.nav_panel("None", value="sources_local_impact"):
@@ -2143,7 +2143,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, sources_local_impact_tab = result
-                                return ui.HTML(DT(sources_local_impact_tab, style="width=100%;"))
+                                return ui.HTML(DT(sources_local_impact_tab, style="width:100%;"))
         
         # --- Sources' Production ---
         with ui.nav_panel("None", value="sources_production"):
@@ -2289,7 +2289,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, sources_production_tab = result
-                                return ui.HTML(DT(sources_production_tab, style="width=100%;"))
+                                return ui.HTML(DT(sources_production_tab, style="width:100%;"))
         
         # --- Most Relevant Authors Section ---
         with ui.nav_panel("None", value="most_relevant_authors"):
@@ -2436,7 +2436,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, relevant_authors_tab = result
-                                return ui.HTML(DT(relevant_authors_tab, style="width=100%;"))
+                                return ui.HTML(DT(relevant_authors_tab, style="width:100%;"))
         
         # --- Most Local Cited Authors Section ---
         with ui.nav_panel("None", value="most_local_cited_authors"):
@@ -2584,7 +2584,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, local_cited_authors_tab = result
-                                return ui.HTML(DT(local_cited_authors_tab, style="width=100%;"))
+                                return ui.HTML(DT(local_cited_authors_tab, style="width:100%;"))
         
         # --- Authors' Production over Time Section ---
         with ui.nav_panel("None", value="authors_production"):
@@ -2729,7 +2729,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, table_authors_production, _ = result
-                                return ui.HTML(DT(table_authors_production, style="width=100%;"))
+                                return ui.HTML(DT(table_authors_production, style="width:100%;"))
 
                         with ui.nav_panel("Table - Documents"):
                             @render.ui
@@ -2747,7 +2747,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                     table_documents['DOI'] = table_documents['DOI'].apply(
                                         lambda x: f'<a href="https://doi.org/{x}" target="_blank">{x}</a>' if x != "N/A" else x
                                     )
-                                return ui.HTML(DT(table_documents, style="width=100%;"))
+                                return ui.HTML(DT(table_documents, style="width:100%;"))
                     # AI bot Gemini Chat Integration
             # --- Floating Chat Button ---
             @render.express()
@@ -2899,7 +2899,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         @render.ui
                         def table_lotka_law():
                             _, lotka_law_tab = lotka_law()
-                            return ui.HTML(DT(lotka_law_tab, style="width=100%;"))
+                            return ui.HTML(DT(lotka_law_tab, style="width:100%;"))
         
         # --- Authors' Local Impact Section ---
         with ui.nav_panel("None", value="authors_local_impact"):
@@ -3046,7 +3046,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, authors_local_impact_tab = result
-                                return ui.HTML(DT(authors_local_impact_tab, style="width=100%;"))
+                                return ui.HTML(DT(authors_local_impact_tab, style="width:100%;"))
         
         # --- Most Relevant Affiliations Section ---
         with ui.nav_panel("None", value="most_relevant_affiliations"):
@@ -3193,7 +3193,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, relevant_affiliations_tab = result
-                                return ui.HTML(DT(relevant_affiliations_tab, style="width=100%;"))
+                                return ui.HTML(DT(relevant_affiliations_tab, style="width:100%;"))
         
         # --- Affiliations' Production over Time Section ---
         with ui.nav_panel("None", value="affiliations_production"):
@@ -3335,7 +3335,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, table_affiliations_production = result
-                                return ui.HTML(DT(table_affiliations_production, style="width=100%;"))
+                                return ui.HTML(DT(table_affiliations_production, style="width:100%;"))
         
         # --- Affiliations' Local Impact Section ---
         with ui.nav_panel("None", value="corresponding_authors"):
@@ -3479,7 +3479,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, countries_table = result
-                                return ui.HTML(DT(countries_table, style="width=100%;"))
+                                return ui.HTML(DT(countries_table, style="width:100%;"))
         
         # --- Countries' Scientific Production Section ---
         with ui.nav_panel("None", value="countries_scientific_production"):
@@ -3585,7 +3585,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                         @render.ui
                         def table_countries_production():
                             _, countries_table = countries_production()
-                            return ui.HTML(DT(countries_table, style="width=100%;"))
+                            return ui.HTML(DT(countries_table, style="width:100%;"))
 
         # --- Countries' Production over Time Section ---
         with ui.nav_panel("None", value="countries_production_over_time"):
@@ -3729,7 +3729,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, countries_table = result
-                                return ui.HTML(DT(countries_table, style="width=100%;"))
+                                return ui.HTML(DT(countries_table, style="width:100%;"))
         
         # --- Most Cited Countries Section ---
         with ui.nav_panel("None", value="most_cited_countries"):
@@ -3875,7 +3875,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, cited_countries_tab = result
-                                return ui.HTML(DT(cited_countries_tab, style="width=100%;"))
+                                return ui.HTML(DT(cited_countries_tab, style="width:100%;"))
         
         # --- Most Global Cited Documents Section ---
         with ui.nav_panel("None", value="most_global_cited_documents"):
@@ -4015,7 +4015,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, cited_documents_tab = result
-                                return ui.HTML(DT(cited_documents_tab, style="width=100%;"))
+                                return ui.HTML(DT(cited_documents_tab, style="width:100%;"))
         
         # --- Most Local Cited Documents Section ---
         with ui.nav_panel("None", value="most_local_cited_documents"):
@@ -4161,7 +4161,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, local_cited_documents_tab = result
-                                return ui.HTML(DT(local_cited_documents_tab, style="width=100%;"))
+                                return ui.HTML(DT(local_cited_documents_tab, style="width:100%;"))
         
         # --- Most Local Cited References Section ---
         with ui.nav_panel("None", value="most_local_cited_references"):
@@ -4307,7 +4307,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, local_cited_refs_tab = result
-                                return ui.HTML(DT(local_cited_refs_tab, style="width=100%;"))
+                                return ui.HTML(DT(local_cited_refs_tab, style="width:100%;"))
         
         # --- References Spectroscopy Section ---
         with ui.nav_panel("None", value="references_spectroscopy"):
@@ -4457,7 +4457,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, ref_rpy_tab, _ = result
-                                return ui.HTML(DT(ref_rpy_tab, style="width=100%;"))
+                                return ui.HTML(DT(ref_rpy_tab, style="width:100%;"))
 
                         with ui.nav_panel("Table - Cited References"):
                             @render.ui
@@ -4469,7 +4469,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, _, ref_spectroscopy_tab = result
-                                return ui.HTML(DT(ref_spectroscopy_tab, style="width=100%;"))
+                                return ui.HTML(DT(ref_spectroscopy_tab, style="width:100%;"))
 
         # --- Most Frequent Words ---
         with ui.nav_panel("None", value="most_frequent_words"):
@@ -4687,7 +4687,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, frequent_words_tab = result
-                                return ui.HTML(DT(frequent_words_tab, style="width=100%;"))
+                                return ui.HTML(DT(frequent_words_tab, style="width:100%;"))
         
         # --- WordCloud Section ---
         with ui.nav_panel("None", value="wordcloud"):
@@ -4905,7 +4905,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, wordcloud_tab = result
-                                return ui.HTML(DT(wordcloud_tab, style="width=100%;"))
+                                return ui.HTML(DT(wordcloud_tab, style="width:100%;"))
         
         # --- TreeMap Section ---
         with ui.nav_panel("None", value="treemap"):
@@ -5123,7 +5123,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                         style="height: 400px; display: flex; flex-direction: column; justify-content: center; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
                                     )
                                 _, treemap_tab = result
-                                return ui.HTML(DT(treemap_tab, style="width=100%;"))
+                                return ui.HTML(DT(treemap_tab, style="width:100%;"))
         
         # --- References Spectroscopy Section ---
         with ui.nav_panel("None", value="words_frequency_over_time"):
@@ -6058,7 +6058,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 result = co_occurrence_network_results.get()
                                 if result is not None:
                                     _, _, co_occurrence_network_tab, _ = result
-                                    return ui.HTML(DT(co_occurrence_network_tab, style="width=100%;"))
+                                    return ui.HTML(DT(co_occurrence_network_tab, style="width:100%;"))
                                 else:
                                     return ui.div(
                                         ui.p("Click the Run Analysis button to run co-occurrence network", style="text-align: center; color: #999; font-size: 16px;"),
@@ -6279,7 +6279,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 result = thematic_map_results.get()
                                 if result is not None:
                                     _, _, thematic_map_table, _, _ = result
-                                    return ui.HTML(DT(thematic_map_table, style="width=100%;"))
+                                    return ui.HTML(DT(thematic_map_table, style="width:100%;"))
                                 else:
                                     return ui.div(
                                         ui.p("Click the Run Analysis button to run thematic map", style="text-align: center; color: #999; font-size: 16px;"),
@@ -6292,7 +6292,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 result = thematic_map_results.get()
                                 if result is not None:
                                     _, _, _, thematic_map_cluster, _ = result
-                                    return ui.HTML(DT(thematic_map_cluster, style="width=100%;"))
+                                    return ui.HTML(DT(thematic_map_cluster, style="width:100%;"))
                                 else:
                                     return ui.div(
                                         ui.p("Click the Run Analysis button to run thematic map", style="text-align: center; color: #999; font-size: 16px;"),
@@ -6305,7 +6305,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 result = thematic_map_results.get()
                                 if result is not None:
                                     _, _, _, _, thematic_map_documents = result
-                                    return ui.HTML(DT(thematic_map_documents, maxBytes="10MB", style="width=100%;"))
+                                    return ui.HTML(DT(thematic_map_documents, maxBytes="10MB", style="width:100%;"))
                                 else:
                                     return ui.div(
                                         ui.p("Click the Run Analysis button to run thematic map", style="text-align: center; color: #999; font-size: 16px;"),
@@ -6607,7 +6607,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                             result = thematic_evolution_results.get()
                                             if result is not None:
                                                 _, thematic_evolution_table, _ = result
-                                                return ui.HTML(DT(thematic_evolution_table, style="width=100%;"))
+                                                return ui.HTML(DT(thematic_evolution_table, style="width:100%;"))
                                             else:
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
@@ -6646,7 +6646,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 0:
-                                                        return ui.HTML(DT(TM[0]["words"], style="width=100%;"))
+                                                        return ui.HTML(DT(TM[0]["words"], style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6659,7 +6659,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 0:
-                                                        return ui.HTML(DT(TM[0]["clusters"], style="width=100%;"))
+                                                        return ui.HTML(DT(TM[0]["clusters"], style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6672,7 +6672,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 0:
-                                                        return ui.HTML(DT(TM[0]["documentToClusters"], maxBytes="10MB", style="width=100%;"))
+                                                        return ui.HTML(DT(TM[0]["documentToClusters"], maxBytes="10MB", style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6710,7 +6710,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 1:
-                                                        return ui.HTML(DT(TM[1]["words"], style="width=100%;"))
+                                                        return ui.HTML(DT(TM[1]["words"], style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6723,7 +6723,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 1:
-                                                        return ui.HTML(DT(TM[1]["clusters"], style="width=100%;"))
+                                                        return ui.HTML(DT(TM[1]["clusters"], style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6736,7 +6736,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 1:
-                                                        return ui.HTML(DT(TM[1]["documentToClusters"], maxBytes="10MB", style="width=100%;"))
+                                                        return ui.HTML(DT(TM[1]["documentToClusters"], maxBytes="10MB", style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6774,7 +6774,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 2:
-                                                        return ui.HTML(DT(TM[2]["words"], style="width=100%;"))
+                                                        return ui.HTML(DT(TM[2]["words"], style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6787,7 +6787,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 2:
-                                                        return ui.HTML(DT(TM[2]["clusters"], style="width=100%;"))
+                                                        return ui.HTML(DT(TM[2]["clusters"], style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6800,7 +6800,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 2:
-                                                        return ui.HTML(DT(TM[2]["documentToClusters"], maxBytes="10MB", style="width=100%;"))
+                                                        return ui.HTML(DT(TM[2]["documentToClusters"], maxBytes="10MB", style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6838,7 +6838,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 3:
-                                                        return ui.HTML(DT(TM[3]["words"], style="width=100%;"))
+                                                        return ui.HTML(DT(TM[3]["words"], style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6851,7 +6851,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 3:
-                                                        return ui.HTML(DT(TM[3]["clusters"], style="width=100%;"))
+                                                        return ui.HTML(DT(TM[3]["clusters"], style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6864,7 +6864,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 3:
-                                                        return ui.HTML(DT(TM[3]["documentToClusters"], maxBytes="10MB", style="width=100%;"))
+                                                        return ui.HTML(DT(TM[3]["documentToClusters"], maxBytes="10MB", style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6902,7 +6902,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 4:
-                                                        return ui.HTML(DT(TM[4]["words"]), style="width=100%;")
+                                                        return ui.HTML(DT(TM[4]["words"]), style="width:100%;")
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6915,7 +6915,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 4:
-                                                        return ui.HTML(DT(TM[4]["clusters"], style="width=100%;"))
+                                                        return ui.HTML(DT(TM[4]["clusters"], style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -6928,7 +6928,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                                 if result is not None:
                                                     _, _, TM = result
                                                     if len(TM) > 4:
-                                                        return ui.HTML(DT(TM[4]["documentToClusters"], maxBytes="10MB", style="width=100%;"))
+                                                        return ui.HTML(DT(TM[4]["documentToClusters"], maxBytes="10MB", style="width:100%;"))
                                                 return ui.div(
                                                     ui.p("Click the Run Analysis button to run thematic evolution", style="text-align: center; color: #999; font-size: 16px;"),
                                                     style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 300px; border: 2px dashed #ddd; border-radius: 10px; margin: 20px;"
@@ -7214,7 +7214,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 result = factorial_analysis_results.get()
                                 if result is not None:
                                     _, _, words_by_cluster, _ = result
-                                    return ui.HTML(DT(words_by_cluster, style="width=100%;"))
+                                    return ui.HTML(DT(words_by_cluster, style="width:100%;"))
                                 else:
                                     return ui.div(
                                         ui.p("Click the Run Analysis button to run factorial analysis", style="text-align: center; color: #999; font-size: 16px;"),
@@ -7227,7 +7227,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 result = factorial_analysis_results.get()
                                 if result is not None:
                                     _, _, _, articles_by_cluster = result
-                                    return ui.HTML(DT(articles_by_cluster, style="width=100%;"))
+                                    return ui.HTML(DT(articles_by_cluster, style="width:100%;"))
                                 else:
                                     return ui.div(
                                         ui.p("Click the Run Analysis button to run factorial analysis", style="text-align: center; color: #999; font-size: 16px;"),
@@ -7508,7 +7508,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 result = co_citation_network_results.get()
                                 if result is not None:
                                     _, _, cocit_table, _ = result
-                                    return ui.HTML(DT(cocit_table, style="width=100%;"))
+                                    return ui.HTML(DT(cocit_table, style="width:100%;"))
                                 else:
                                     return ui.div(
                                         ui.p("Click the Run Analysis button to generate the co-citation table.", style="text-align: center; color: #666; font-size: 16px;"),
@@ -7723,7 +7723,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 result = historiograph_results.get()
                                 if result is not None:
                                     _, hist_tab, _ = result
-                                    return ui.HTML(DT(hist_tab, style="width=100%;"))
+                                    return ui.HTML(DT(hist_tab, style="width:100%;"))
                                 else:
                                     return ui.div(
                                         ui.p("Click the Run Analysis button to generate the historiograph table.", style="text-align: center; color: #666; font-size: 16px;"),
@@ -8028,7 +8028,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 result = collaboration_network_results.get()
                                 if result is not None:
                                     _, _, collab_table, _ = result
-                                    return ui.HTML(DT(collab_table, style="width=100%;"))
+                                    return ui.HTML(DT(collab_table, style="width:100%;"))
                                 else:
                                     return ui.div(
                                         ui.p("Click the Run Analysis button to generate the collaboration table.", style="text-align: center; color: #666; font-size: 16px;"),
@@ -8208,7 +8208,7 @@ with ui.tags.div(id="mainContent", class_="main-content"):
                                 result = countries_collaboration_network_results.get()
                                 if result is not None:
                                     _, world_map_table = result
-                                    return ui.HTML(DT(world_map_table, style="width=100%;"))
+                                    return ui.HTML(DT(world_map_table, style="width:100%;"))
                                 else:
                                     return ui.div(
                                         ui.p("Click the Run Analysis button to generate the world map collaboration table.", style="text-align: center; color: #666; font-size: 16px;"),

@@ -1,8 +1,0 @@
-Cited Documents Analysis
-Unique documents: 997
-Documents with citations: 22
-Total citations: 22
-Ranking metric: Total Citations
-Top document: D’Souza K., 2024, Human Resources for Health
-Top document Total Citations: 1
-Top 10 documents total citations: 10

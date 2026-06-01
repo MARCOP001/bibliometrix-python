@@ -1,5 +1,0 @@
-Relevant Authors Analysis
-Unique authors: 6427
-Metric: N. of Documents
-Top author: Wang X. (13 N. of Documents)
-Top 10 authors total: 89

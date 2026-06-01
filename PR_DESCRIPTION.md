@@ -27,6 +27,8 @@ La pipeline ETL introdotta risolve questi problemi imponendo uno schema target s
 
 La traccia richiede una pipeline ETL robusta, non una singola funzione monolitica. Questo requisito viene risolto separando il lavoro in moduli distinti: `file_extractor.py` si occupa solo dell'estrazione dei file, `api_retriever.py` gestisce il recupero via API, `standardizer.py` contiene la trasformazione verso lo schema comune, mentre `validation.py` controlla che il risultato finale rispetti il contratto previsto. In questo modo ogni fase ha una responsabilita' chiara e la pipeline puo' essere controllata o estesa senza modificare tutto il sistema.
 
+All'interno della fase Extract rientrano anche i parser in `parsers.py`. Sono stati aggiunti per gestire formati non tabellari, come export testuali Web of Science, Cochrane, PubMed MEDLINE e record XML PubMed. Questi file non possono essere trattati sempre con una semplice lettura CSV/Excel, perche' contengono record separati da tag, righe di continuazione e campi ripetuti. I parser trasformano quindi il contenuto grezzo in liste di dizionari Python, senza applicare ancora lo schema finale: la standardizzazione vera e propria resta compito di `convert2df()`.
+
 La traccia richiede anche un punto di ingresso simile a `convert2df()` di bibliometrix in R. Questo viene risolto con la funzione `convert2df()` in `www/services/standardizer.py`. Tutti i record, indipendentemente dalla sorgente, passano da questa funzione prima di essere caricati nella dashboard. Questo evita che ogni funzione analitica debba conoscere il formato originale di Scopus, PubMed, Dimensions, Lens, Cochrane, OpenAlex o Web of Science.
 
 Un altro requisito e' l'uso di dizionari di mapping invece di logica hardcoded. Questo viene gestito con `FORMAT_FUNCTIONS_MAP`, che collega ogni campo target dello schema Bibliometrix alla funzione che lo produce, e con `SOURCE_NAME_MAP`, che traduce i nomi normalizzati delle sorgenti negli identificativi attesi dalle funzioni legacy.
@@ -47,7 +49,7 @@ Per il livello avanzato, la traccia richiede il recupero dati via API da piattaf
 
 ## Architettura ETL
 
-La soluzione e' organizzata in quattro moduli principali. `file_extractor.py` legge file manuali come CSV, Excel, TXT/CIW, BibTeX e ZIP, limitandosi alla fase di estrazione. `api_retriever.py` copre il flusso avanzato da OpenAlex e PubMed, trasformando le risposte API in record intermedi compatibili con la stessa pipeline. `standardizer.py` contiene `convert2df()`, il dispatcher, i mapping e i contratti di tipo. `validation.py` verifica che record e DataFrame finali rispettino lo schema atteso.
+La soluzione e' organizzata in moduli con responsabilita' separate. `file_extractor.py` coordina la lettura dei file manuali; quando il formato non e' tabellare, delega a `parsers.py`, che interpreta export testuali o XML e li converte in record grezzi strutturati. `api_retriever.py` copre il flusso avanzato da OpenAlex e PubMed, trasformando le risposte API in record intermedi compatibili con la stessa pipeline. `standardizer.py` contiene `convert2df()`, il dispatcher, i mapping e i contratti di tipo. `validation.py` verifica che record e DataFrame finali rispettino lo schema atteso.
 
 Questa separazione evita di duplicare logica nei parser, nella dashboard e nelle funzioni analitiche: le sorgenti entrano nella pipeline in modi diversi, ma prima dell'analisi passano tutte dallo stesso standardizer.
 
@@ -221,7 +223,7 @@ Il progetto include anche un flusso avanzato per OpenAlex e PubMed. La parte ril
 
 ## File principali modificati
 
-I principali file ETL coinvolti sono `www/services/file_extractor.py`, `www/services/api_retriever.py`, `www/services/standardizer.py`, `www/services/validation.py` e `www/services/format_functions.py`.
+I principali file ETL coinvolti sono `www/services/file_extractor.py`, `www/services/parsers.py`, `www/services/api_retriever.py`, `www/services/standardizer.py`, `www/services/validation.py` e `www/services/format_functions.py`.
 
 Le funzioni analitiche patchate sono `get_annualproduction.py`, `get_averagecitations.py`, `get_relevantsources.py`, `get_bradfordlaw.py`, `get_relevantauthors.py`, `get_lotkalaw.py` e `get_citeddocuments.py`.
 

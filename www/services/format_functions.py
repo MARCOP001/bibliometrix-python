@@ -1,3 +1,5 @@
+"""Formatta record bibliografici grezzi nello schema interno Bibliometrix."""
+
 from .utils import *
 from .parsers import *
 import zipfile
@@ -5,7 +7,24 @@ import tempfile
 import os
 
 
-def format_ab_column(entry, source, file_type):         # Function for AB Column (format--> "Abstract")
+def format_ab_column(entry, source, file_type):
+    """Restituisce l'abstract mappato nella colonna Bibliometrix ``AB``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo della sorgente selezionata.
+        source (str): Nome normalizzato della sorgente, come ``Web_of_Science`` o
+            ``Scopus``.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi specifici della sorgente.
+
+    Restituisce:
+        str: Testo dell'abstract, oppure stringa vuota quando la combinazione
+        sorgente/formato non lo fornisce.
+
+    Solleva:
+        KeyError: Puo propagarsi quando un ramo supportato richiede un campo
+        obbligatorio assente da ``entry``.
+    """
     abstract = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -33,7 +52,25 @@ def format_ab_column(entry, source, file_type):         # Function for AB Column
     return abstract
 
 
-def format_af_column(entry, source, file_type):         # Function for AF Column (format--> "[Surname, Name]")
+def format_af_column(entry, source, file_type):
+    """Formatta i nomi completi degli autori per la colonna ``AF``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sugli autori.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input che determina la
+            convenzione dei campi autore.
+
+    Restituisce:
+        list[str] | str: Autori formattati come ``Cognome Nome``. Alcuni rami
+        non supportati mantengono il valore di ripiego esistente a stringa vuota.
+
+    Solleva:
+        KeyError: Puo propagarsi quando mancano campi autore specifici della
+        sorgente.
+        ValueError: Puo propagarsi con stringhe autore malformate nei rami che
+        scompongono pattern di nome fissi.
+    """
     authors = []
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -49,7 +86,6 @@ def format_af_column(entry, source, file_type):         # Function for AF Column
                     surname = parts[0]
                     first_names = ' '.join(parts[1:])
 
-                # author_dict = {'Surname': surname, 'Name': first_names}
                 author_dict = surname + ' ' + first_names
                 authors.append(author_dict)
         elif file_type == '.txt' or file_type == '.ciw':
@@ -63,7 +99,6 @@ def format_af_column(entry, source, file_type):         # Function for AF Column
                     surname = parts[0]
                     first_names = ' '.join(parts[1:])
 
-                # author_dict = {'Surname': surname, 'Name': first_names}
                 author_dict = surname + ' ' + first_names
                 authors.append(author_dict)
     elif source == 'PubMed':
@@ -71,14 +106,12 @@ def format_af_column(entry, source, file_type):         # Function for AF Column
             for author in entry.get('FAU', '').split(";"):
                 if ', ' in author:
                     surname, first_names = author.split(", ")
-                    #author_dict = {'Surname': surname, 'Name': first_names}
                     author_dict = surname + ' ' + first_names
                     authors.append(author_dict)
                 else:
-                    # Handle cases where the author string does not contain a comma and space
+                    # Alcuni export PubMed non separano cognome e nomi con virgola.
                     surname = author
                     first_names = ''
-                    #author_dict = {'Surname': surname, 'Name': first_names}
                     author_dict = surname + ' ' + first_names
                     authors.append(author_dict)
     elif source == 'Scopus':
@@ -107,7 +140,6 @@ def format_af_column(entry, source, file_type):         # Function for AF Column
             for person in persons:
                 if person.strip() and len(person.split(", ")) == 2:
                     surname, name = person.split(", ")
-                    # author_dict = {'Surname': surname, 'Name': name}
                     author_dict = surname + ' ' + name
                     authors.append(author_dict)
     elif source == 'The_Lens':
@@ -118,7 +150,6 @@ def format_af_column(entry, source, file_type):         # Function for AF Column
                     parts = person.split(" ")
                     name = " ".join(parts[:-1])
                     surname = parts[-1]
-                    # author_dict = {'Surname': surname, 'Name': name}
                     author_dict = surname + ' ' + name
                     authors.append(author_dict)
     elif source == 'Cochrane':
@@ -127,7 +158,25 @@ def format_af_column(entry, source, file_type):         # Function for AF Column
     return authors
 
 
-def format_au_column(entry, source, file_type):         # Function for AU Column (format--> "[Surname, N.]")
+def format_au_column(entry, source, file_type):
+    """Formatta i nomi abbreviati degli autori per la colonna ``AU``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sugli autori.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input che determina come
+            vengono analizzati i nomi.
+
+    Restituisce:
+        list[str]: Nomi autore formattati con cognome e iniziali secondo le
+        convenzioni gia usate da ciascun ramo di sorgente.
+
+    Solleva:
+        KeyError: Puo propagarsi quando mancano campi sorgente richiesti.
+        IndexError: Puo propagarsi quando una stringa autore e' vuota in modo
+        inatteso.
+        ValueError: Puo propagarsi con nomi malformati a formato fisso.
+    """
     authors = []
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -143,7 +192,6 @@ def format_au_column(entry, source, file_type):         # Function for AU Column
                     names = ' '.join(parts[1:])
 
                 initials = ''.join([name[0] for name in names.split() if name])
-                # author_dict = {'Surname': surname, 'Name Initials': initials}
                 author_dict = surname + ' ' + initials
                 authors.append(author_dict)
         elif file_type == '.txt' or file_type == '.ciw':
@@ -156,8 +204,6 @@ def format_au_column(entry, source, file_type):         # Function for AU Column
                     surname = parts[0]
                     names = ' '.join(parts[1:])
 
-                # initials = ''.join([name[0] + '.' for name in re.split(r'[ -]', names) if name])
-                # author_dict = {'Surname': surname, 'Name Initials': initials}
                 author_dict = surname + ' ' + names
                 authors.append(author_dict)
     elif source == 'PubMed':
@@ -167,7 +213,6 @@ def format_au_column(entry, source, file_type):         # Function for AU Column
                 if author:
                     surname, *initials = author.split(" ")
                     initials = ' '.join(initials)
-                    #author_dict = {'Surname': surname, 'Name Initials': initials}
                     author_dict = surname + ' ' + initials
                     authors.append(author_dict)
     elif source == 'Scopus':
@@ -226,17 +271,32 @@ def format_au_column(entry, source, file_type):         # Function for AU Column
                 if author:
                     surname, *initials = author.split(" ")
                     if len(initials) >= 2:
-                        #author_dict = {'Surname': initials[0], 'Name Initials': initials[1]}
                         author_dict = initials[0] + ' ' + initials[1]
                     else:
-                        #author_dict = {'Surname': surname, 'Name Initials': initials[0]}
                         author_dict = surname + ' ' + initials[0]
                     authors.append(author_dict)
 
     return authors
 
 
-def format_au1_un_column(entry, source, file_type):     # Function for AU1_UN Column (format--> "University of the First Author")
+def format_au1_un_column(entry, source, file_type):
+    """Estrae l'affiliazione del primo autore per la colonna ``AU1_UN``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con campi di affiliazione.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare il
+            campo di affiliazione.
+
+    Restituisce:
+        str | list: Prima affiliazione o valore vuoto, preservando il tipo di
+        valore di ripiego esistente usato da ciascun ramo di sorgente.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo affiliazione obbligatorio.
+        IndexError: Puo propagarsi quando un'affiliazione analizzata non contiene
+        le parti attese.
+    """
     university = []
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -282,7 +342,24 @@ def format_au1_un_column(entry, source, file_type):     # Function for AU1_UN Co
     return university
 
 
-def format_au_un_column(entry, source, file_type):      # Function for AU_UN Column (format--> [Universities])
+def format_au_un_column(entry, source, file_type):
+    """Estrae le affiliazioni degli autori per la colonna ``AU_UN``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con uno o piu campi di
+            affiliazione.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare la
+            regola di parsing.
+
+    Restituisce:
+        list[str] | str: Raccolta di nomi di affiliazione, oppure il valore di
+        ripiego vuoto esistente per le sorgenti che non espongono questo campo.
+
+    Solleva:
+        KeyError: Puo propagarsi quando mancano campi richiesti specifici della
+        sorgente.
+    """
     universities = []
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -336,7 +413,22 @@ def format_au_un_column(entry, source, file_type):      # Function for AU_UN Col
     return universities
 
 
-def format_bp_column(entry, source, file_type):         # Function for BP Column (format--> Begin Page)
+def format_bp_column(entry, source, file_type):
+    """Estrae la pagina iniziale per la colonna Bibliometrix ``BP``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati di paginazione.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per individuare i
+            campi di paginazione.
+
+    Restituisce:
+        str: Pagina iniziale quando disponibile, altrimenti stringa vuota.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo di paginazione specifico
+        della sorgente.
+    """
     begin_page = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -371,26 +463,47 @@ def format_bp_column(entry, source, file_type):         # Function for BP Column
     return begin_page
 
 
-def format_c1_column(entry, source, file_type):         # Function for C1 Column (format--> [Affiliations])
+def format_c1_column(entry, source, file_type):
+    """Formatta le affiliazioni degli autori per la colonna ``C1``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con informazioni di
+            affiliazione.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare il
+            parser delle affiliazioni.
+
+    Restituisce:
+        list[str]: Stringhe di affiliazione estratte dal campo specifico della
+        sorgente.
+
+    Solleva:
+        KeyError: Puo propagarsi quando mancano campi affiliazione richiesti.
+        IndexError: Puo propagarsi quando un'affiliazione strutturata non
+        contiene i separatori attesi.
+    """
     affiliations = []
     if source == 'Web_of_Science':
         if file_type == '.bib':
             affiliation_text = entry.get('affiliation', '')
             if affiliation_text:
-                affiliation_lines = affiliation_text.strip().split("\n")  # Remove leading and trailing whitespaces from the 'affiliation' field and split it into lines.
+                affiliation_lines = affiliation_text.strip().split("\n")
 
                 for line in affiliation_lines:
                     if "(Corresponding Author)" not in line:
                         num_authors = len(line.split("; "))
-                        if num_authors == 0:  # If there is just one author, the affiliation is the string formed by joining the parts from the third part onwards.
+                        if num_authors == 0:
                             parts = line.split(",")
                             affiliation = ", ".join(parts[2:])
-                        else:  # If there are multiple authors, split the last part into subparts using ',' as the separator. The affiliation is the string formed by joining the subparts from the third subpart onwards.
+                        else:
+                            # Nei BibTeX WoS con piu autori, l'affiliazione utile
+                            # e' concentrata nell'ultimo segmento separato da punto
+                            # e virgola.
                             parts = line.split(";")
                             last_parts = parts[-1]
                             last_part = last_parts.split(",")
                             affiliation = ", ".join(last_part[2:])
-                        affiliation = affiliation.strip().rstrip('.')  # Remove leading and trailing whitespaces from the affiliation and remove any trailing '.'
+                        affiliation = affiliation.strip().rstrip('.')
                         affiliations.append(affiliation)
         elif file_type == '.txt' or file_type == '.ciw':
             author_affiliations = entry.get('C1', '')
@@ -427,7 +540,22 @@ def format_c1_column(entry, source, file_type):         # Function for C1 Column
     return affiliations
 
 
-def format_cr_column(entry, source, file_type):         # Function for CR Column (format--> "[References]")
+def format_cr_column(entry, source, file_type):
+    """Estrae i riferimenti citati per la colonna Bibliometrix ``CR``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sui riferimenti.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input che determina la
+            convenzione del campo riferimenti.
+
+    Restituisce:
+        list[str]: Riferimenti citati, oppure lista vuota quando non disponibili.
+
+    Solleva:
+        KeyError: Puo propagarsi quando un ramo di sorgente richiede un campo
+        assente.
+    """
     cited_references = []
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -458,7 +586,23 @@ def format_cr_column(entry, source, file_type):         # Function for CR Column
     return cited_references
 
 
-def format_de_column(entry, source, file_type):         # Function for DE Column (format--> "[Keywords]")
+def format_de_column(entry, source, file_type):
+    """Estrae le parole chiave autore per la colonna Bibliometrix ``DE``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sulle parole
+            chiave.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi delle parole chiave.
+
+    Restituisce:
+        list[str]: Parole chiave autore dopo la pulizia specifica gia codificata
+        in ciascun ramo.
+
+    Solleva:
+        KeyError: Puo propagarsi quando mancano campi parola chiave richiesti.
+    """
     author_keywords = []
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -495,7 +639,6 @@ def format_de_column(entry, source, file_type):         # Function for DE Column
             else:
                 keywords = str(entry['MeSH terms']).split("; ")
                 for keyword in keywords:
-                    # keyword_dict = {'Terms': keyword}
                     author_keywords.append(keyword)
     elif source == 'The_Lens':
         if file_type == '.csv':
@@ -504,7 +647,6 @@ def format_de_column(entry, source, file_type):         # Function for DE Column
             else:
                 keywords = str(entry['Keywords']).split("; ")
                 for keyword in keywords:
-                    # keyword_dict = {'Terms': keyword}
                     author_keywords.append(keyword)
     elif source == 'Cochrane':
         if file_type == '.txt':
@@ -514,7 +656,22 @@ def format_de_column(entry, source, file_type):         # Function for DE Column
     return author_keywords
 
 
-def format_di_column(entry, source, file_type):         # Function for DI Column (format--> "DOI")
+def format_di_column(entry, source, file_type):
+    """Estrae il DOI per la colonna Bibliometrix ``DI``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con identificativi.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi DOI.
+
+    Restituisce:
+        str: Valore DOI, oppure stringa vuota quando non disponibile.
+
+    Solleva:
+        KeyError: Puo propagarsi quando un ramo supportato richiede un campo DOI
+        assente.
+    """
     doi = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -542,7 +699,24 @@ def format_di_column(entry, source, file_type):         # Function for DI Column
     return doi
 
 
-def format_dt_column(entry, source, file_type):         # Function for DT Column ("Document Type")
+def format_dt_column(entry, source, file_type):
+    """Estrae il tipo di documento per la colonna Bibliometrix ``DT``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sul tipo di
+            pubblicazione.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi del tipo documento.
+
+    Restituisce:
+        str: Tipo di documento o stringa vuota quando la sorgente non lo
+        fornisce.
+
+    Solleva:
+        KeyError: Puo propagarsi quando un campo obbligatorio della sorgente e'
+        assente.
+    """
     document_type = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -570,7 +744,24 @@ def format_dt_column(entry, source, file_type):         # Function for DT Column
     return document_type
 
 
-def format_em_column(entry, source, file_type):         # Function for EM Column (format--> "[Authors E-mail]")
+def format_em_column(entry, source, file_type):
+    """Estrae gli indirizzi email degli autori per la colonna ``EM``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati di affiliazione
+            o email.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi email.
+
+    Restituisce:
+        list[str] | str: Indirizzi email, oppure il valore di ripiego esistente
+        a stringa vuota per sorgenti senza metadati email.
+
+    Solleva:
+        KeyError: Puo propagarsi quando mancano campi richiesti specifici della
+        sorgente.
+    """
     emails = []
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -609,7 +800,22 @@ def format_em_column(entry, source, file_type):         # Function for EM Column
     return emails
 
 
-def format_ep_column(entry, source, file_type):         # Function for EP Column ("End Page")
+def format_ep_column(entry, source, file_type):
+    """Estrae la pagina finale per la colonna Bibliometrix ``EP``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati di paginazione.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per individuare i
+            campi di paginazione.
+
+    Restituisce:
+        str: Pagina finale quando disponibile, altrimenti stringa vuota.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo di paginazione specifico
+        della sorgente.
+    """
     end_page = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -652,7 +858,22 @@ def format_ep_column(entry, source, file_type):         # Function for EP Column
     return end_page
 
 
-def format_fu_column(entry, source, file_type):         # Function for FU Column ("Funding Details")
+def format_fu_column(entry, source, file_type):
+    """Estrae i dettagli di finanziamento per la colonna ``FU``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sui finanziamenti.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi di finanziamento.
+
+    Restituisce:
+        list[str] | str: Dettagli di finanziamento nel tipo attualmente prodotto
+        dal ramo di sorgente selezionato.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo finanziamento richiesto.
+    """
     funding = []
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -682,7 +903,22 @@ def format_fu_column(entry, source, file_type):         # Function for FU Column
     return funding
 
 
-def format_fx_column(entry, source, file_type):         # Function for FX Column (format--> "Funding Text")
+def format_fx_column(entry, source, file_type):
+    """Estrae il testo dei ringraziamenti ai finanziatori per la colonna ``FX``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con testo sui finanziamenti.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi della sorgente.
+
+    Restituisce:
+        str: Testo dei finanziamenti o stringa vuota quando non disponibile.
+
+    Solleva:
+        KeyError: Puo propagarsi quando un campo richiesto specifico della
+        sorgente e' assente.
+    """
     fx = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -709,7 +945,22 @@ def format_fx_column(entry, source, file_type):         # Function for FX Column
     return fx
 
 
-def format_id_column(entry, source, file_type):         # Function for ID Column (format--> [Index Keywords])
+def format_id_column(entry, source, file_type):
+    """Estrae le parole chiave indicizzate per la colonna ``ID``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con parole chiave controllate.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi delle parole chiave.
+
+    Restituisce:
+        list[str]: Parole chiave indicizzate dopo separazione e pulizia
+        specifiche della sorgente.
+
+    Solleva:
+        KeyError: Puo propagarsi quando mancano campi parola chiave richiesti.
+    """
     index_keywords = []
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -740,7 +991,6 @@ def format_id_column(entry, source, file_type):         # Function for ID Column
             else:
                 keywords = str(entry['MeSH terms']).split("; ")
                 for keyword in keywords:
-                    # keyword_dict = {'Terms': keyword}
                     index_keywords.append(keyword)
     elif source == 'The_Lens':
         if file_type == '.csv':
@@ -749,7 +999,6 @@ def format_id_column(entry, source, file_type):         # Function for ID Column
             else:
                 keywords = str(entry['Keywords']).split("; ")
                 for keyword in keywords:
-                    # keyword_dict = {'Terms': keyword}
                     index_keywords.append(keyword)
     elif source == 'Cochrane':
         if file_type == '.txt':
@@ -759,7 +1008,23 @@ def format_id_column(entry, source, file_type):         # Function for ID Column
     return index_keywords
 
 
-def format_is_column(entry, source, file_type):         # Function for IS Column (format--> "Issue")
+def format_is_column(entry, source, file_type):
+    """Estrae il numero di fascicolo per la colonna Bibliometrix ``IS``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sul fascicolo.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi del fascicolo.
+
+    Restituisce:
+        str: Valore del fascicolo o stringa vuota quando non disponibile.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo fascicolo richiesto.
+        ValueError: Puo propagarsi quando la conversione numerica del fascicolo
+        riceve un valore inatteso.
+    """
     issue = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -788,7 +1053,22 @@ def format_is_column(entry, source, file_type):         # Function for IS Column
     return issue
 
 
-def format_ji_column(entry, source, file_type):         # Function for JI Column (format--> "Abbrev. Journal Name")
+def format_ji_column(entry, source, file_type):
+    """Estrae il nome abbreviato della rivista per la colonna ``JI``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sul titolo della
+            sorgente.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi della rivista.
+
+    Restituisce:
+        str: Titolo abbreviato della rivista/sorgente o stringa vuota.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo titolo sorgente richiesto.
+    """
     abbrev_source_title = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -816,7 +1096,21 @@ def format_ji_column(entry, source, file_type):         # Function for JI Column
     return abbrev_source_title
 
 
-def format_la_column(entry, source, file_type):         # Function for LA Column (format--> "Language")
+def format_la_column(entry, source, file_type):
+    """Estrae la lingua per la colonna Bibliometrix ``LA``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sulla lingua.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi lingua.
+
+    Restituisce:
+        str: Valore della lingua o stringa vuota quando non disponibile.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo lingua richiesto.
+    """
     language = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -844,7 +1138,22 @@ def format_la_column(entry, source, file_type):         # Function for LA Column
     return language
 
 
-def format_oa_column(entry, source, file_type):         # Function for OA Column (format--> [Open Access])
+def format_oa_column(entry, source, file_type):
+    """Estrae i metadati open access per la colonna Bibliometrix ``OA``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati open access.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi OA.
+
+    Restituisce:
+        list[str] | str: Etichette open access nel tipo prodotto dal ramo di
+        sorgente selezionato.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo OA richiesto.
+    """
     open_access = []
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -877,7 +1186,22 @@ def format_oa_column(entry, source, file_type):         # Function for OA Column
     return open_access
 
 
-def format_oi_column(entry, source, file_type):         # Function for OI Column ([Orcid Number]")
+def format_oi_column(entry, source, file_type):
+    """Estrae valori ORCID o identificativi autore per la colonna ``OI``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con identificativi autore.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi identificativo.
+
+    Restituisce:
+        list[str] | str: Identificativi ORCID/autore, oppure il valore di
+        ripiego vuoto corrente per sorgenti prive di questi metadati.
+
+    Solleva:
+        KeyError: Puo propagarsi quando mancano campi identificativo richiesti.
+    """
     oi = []
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -887,7 +1211,9 @@ def format_oi_column(entry, source, file_type):         # Function for OI Column
                     oi.append(parts[-1].strip())
         elif file_type == '.txt' or file_type == '.ciw':
             orcid_ids = list(entry.get('OI', ''))
-            if orcid_ids:  # If the 'OI' field is not empty, split the string into parts using the delimiter '; ' and extract the ORCID number from each part.
+            if orcid_ids:
+                # Il campo WoS puo includere prefissi o URL: si conserva solo
+                # l'identificativo ORCID finale quando ha lunghezza valida.
                 for orcid in orcid_ids:
                     orcid_parts = orcid.split("; ")
                     for part in orcid_parts:
@@ -920,7 +1246,24 @@ def format_oi_column(entry, source, file_type):         # Function for OI Column
     return oi
 
 
-def format_pmid_column(entry, source, file_type):       # Function for PMID Column (format--> "PubMed ID")
+def format_pmid_column(entry, source, file_type):
+    """Estrae l'identificativo PubMed per la colonna ``PMID``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con identificativi di
+            pubblicazione.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi PMID.
+
+    Restituisce:
+        str: ID PubMed o stringa vuota quando non disponibile.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo PMID richiesto.
+        ValueError: Puo propagarsi quando la conversione numerica riceve input
+        malformato.
+    """
     pmid = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -954,7 +1297,21 @@ def format_pmid_column(entry, source, file_type):       # Function for PMID Colu
     return pmid
 
 
-def format_pu_column(entry, source, file_type):         # Function for PU Column (format--> "Publisher")
+def format_pu_column(entry, source, file_type):
+    """Estrae le informazioni sull'editore per la colonna ``PU``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sull'editore.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi editore.
+
+    Restituisce:
+        str: Nome dell'editore o stringa vuota quando non disponibile.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo editore richiesto.
+    """
     publisher = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -982,7 +1339,24 @@ def format_pu_column(entry, source, file_type):         # Function for PU Column
     return publisher
 
 
-def format_py_column(entry, source, file_type):         # Function for PY Column (format--> "Publication Year")
+def format_py_column(entry, source, file_type):
+    """Estrae l'anno di pubblicazione per la colonna ``PY``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati di data.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi anno.
+
+    Restituisce:
+        str | int: Anno di pubblicazione nel tipo attualmente restituito dal
+        ramo di sorgente selezionato.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo data richiesto.
+        IndexError: Puo propagarsi quando una stringa data non contiene un anno
+        nei rami che lo estraggono con una regex.
+    """
     publication_year = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -1011,7 +1385,22 @@ def format_py_column(entry, source, file_type):         # Function for PY Column
     return publication_year
 
 
-def format_rp_column(entry, source, file_type):         # Function for RP Column (format--> "Correspondence Address")
+def format_rp_column(entry, source, file_type):
+    """Costruisce l'indirizzo di corrispondenza per la colonna ``RP``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati di corrispondenza.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi di corrispondenza.
+
+    Restituisce:
+        str: Indirizzo di corrispondenza, eventualmente combinato con la prima
+        email, o stringa vuota quando non disponibile.
+
+    Solleva:
+        KeyError: Puo propagarsi quando mancano campi di corrispondenza richiesti.
+    """
     correspondence_address = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -1019,7 +1408,7 @@ def format_rp_column(entry, source, file_type):         # Function for RP Column
             first_email = ''
             affiliation_text = entry.get('affiliation', '')
             if affiliation_text:
-                affiliation_lines = affiliation_text.strip().split("\n")  # Remove leading and trailing whitespaces from the 'affiliation' field and split it into lines.
+                affiliation_lines = affiliation_text.strip().split("\n")
 
                 for line in affiliation_lines:
                     if "(Corresponding Author)" in line:
@@ -1063,18 +1452,36 @@ def format_rp_column(entry, source, file_type):         # Function for RP Column
     return correspondence_address
 
 
-def format_sc_column(entry, source, file_type):         # Function for SC Column (format--> [Fields of Research])
+def format_sc_column(entry, source, file_type):
+    """Estrae categorie disciplinari o campi di ricerca per la colonna ``SC``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sull'area
+            disciplinare.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi disciplinari.
+
+    Restituisce:
+        list[str] | str: Categorie disciplinari nel tipo di ritorno specifico
+        della sorgente, preservato dall'implementazione esistente.
+
+    Solleva:
+        KeyError: Puo propagarsi quando mancano campi disciplinari richiesti.
+    """
     fields = []
     if source == 'Web_of_Science':
         if file_type == '.bib':
             fields = entry.get('research-areas', '').split("; ")
         elif file_type == '.txt' or file_type == '.ciw':
             original_fields = entry.get('SC', '')
-            if original_fields:  # If the 'SC' field is not empty, split the string into parts using the delimiter '; ' and extract the field of research from each part.
+            if original_fields:
+                # I campi SC possono contenere piu categorie concatenate nello
+                # stesso elemento, separate da punto e virgola.
                 for field in original_fields:
                     field_parts = field.split(";")
                     for part in field_parts:
-                        if part.strip():  # This ensures we skip empty parts
+                        if part.strip():
                             fields.append(part.strip())
             else:
                 fields.append('')
@@ -1096,7 +1503,22 @@ def format_sc_column(entry, source, file_type):         # Function for SC Column
     return fields
 
 
-def format_sn_column(entry, source, file_type):         # Function for SN Column (format--> "ISSN")
+def format_sn_column(entry, source, file_type):
+    """Estrae i metadati ISSN per la colonna Bibliometrix ``SN``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con identificativi seriali.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi ISSN.
+
+    Restituisce:
+        str | list: Valore ISSN nel tipo attualmente restituito dal ramo
+        selezionato.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo ISSN richiesto.
+    """
     issn = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -1124,7 +1546,23 @@ def format_sn_column(entry, source, file_type):         # Function for SN Column
     return issn
 
 
-def format_so_column(entry, source, file_type):         # Function for SO Column (format--> "Journal")
+def format_so_column(entry, source, file_type):
+    """Estrae la rivista o il titolo della sorgente per la colonna ``SO``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sul titolo della
+            sorgente.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi della rivista.
+
+    Restituisce:
+        str: Rivista, titolo del libro o titolo della sorgente; stringa vuota
+        quando non disponibile.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo titolo sorgente richiesto.
+    """
     journal = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -1158,7 +1596,26 @@ def format_so_column(entry, source, file_type):         # Function for SO Column
     return journal
 
 
-def format_sr_column(entry, source, file_type):  # Function for SR Column (format--> "Author, Publication Year, Journal")
+def format_sr_column(entry, source, file_type):
+    """Costruisce la stringa di riferimento sorgente per la colonna ``SR``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con campi autore, anno e
+            titolo della sorgente.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi metadato specifici della sorgente.
+
+    Restituisce:
+        str: Stringa di riferimento nel formato ``Autore, Anno, Rivista`` quando
+        i componenti richiesti sono disponibili.
+
+    Solleva:
+        KeyError: Puo propagarsi quando mancano campi richiesti.
+        IndexError: Puo propagarsi quando liste di autori o anni sono vuote in
+        modo inatteso.
+        ValueError: Puo propagarsi con nomi autore malformati a formato fisso.
+    """
     sr = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -1257,7 +1714,23 @@ def format_sr_column(entry, source, file_type):  # Function for SR Column (forma
     return sr
 
 
-def format_tc_column(entry, source, file_type):  # Function for TC Column (format--> "Times Cited")
+def format_tc_column(entry, source, file_type):
+    """Estrae il numero di citazioni per la colonna Bibliometrix ``TC``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sul conteggio
+            delle citazioni.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi citazione.
+
+    Restituisce:
+        int | str: Numero di citazioni o valore di ripiego corrente specifico della
+        sorgente.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo citazione richiesto.
+    """
     times_cited = 0
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -1291,7 +1764,21 @@ def format_tc_column(entry, source, file_type):  # Function for TC Column (forma
     return times_cited
 
 
-def format_ti_column(entry, source, file_type):  # Function for TI Column (format--> "Title")
+def format_ti_column(entry, source, file_type):
+    """Estrae il titolo della pubblicazione per la colonna ``TI``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sul titolo.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi titolo.
+
+    Restituisce:
+        str: Titolo della pubblicazione o stringa vuota quando non disponibile.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo titolo richiesto.
+    """
     title = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -1323,7 +1810,23 @@ def format_ti_column(entry, source, file_type):  # Function for TI Column (forma
     return title
 
 
-def format_ut_column(entry, source, file_type):  # Function for UT Column (format--> "Publication ID")
+def format_ut_column(entry, source, file_type):
+    """Estrae l'identificativo sorgente della pubblicazione per ``UT``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con identificativi della
+            sorgente.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi identificativo.
+
+    Restituisce:
+        str: Identificativo di pubblicazione specifico della sorgente o stringa
+        vuota.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo identificativo richiesto.
+    """
     publication_id = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -1358,7 +1861,21 @@ def format_ut_column(entry, source, file_type):  # Function for UT Column (forma
     return publication_id
 
 
-def format_vl_column(entry, source, file_type):  # Function for VL Column (format--> "VL: Volume")
+def format_vl_column(entry, source, file_type):
+    """Estrae i metadati del volume per la colonna Bibliometrix ``VL``.
+
+    Parametri:
+        entry (dict): Record bibliografico grezzo con metadati sul volume.
+        source (str): Nome normalizzato della sorgente.
+        file_type (str): Estensione del file di input usata per selezionare i
+            campi volume.
+
+    Restituisce:
+        str: Valore del volume o stringa vuota quando non disponibile.
+
+    Solleva:
+        KeyError: Puo propagarsi quando manca un campo volume richiesto.
+    """
     volume = ''
     if source == 'Web_of_Science':
         if file_type == '.bib':
@@ -1387,16 +1904,22 @@ def format_vl_column(entry, source, file_type):  # Function for VL Column (forma
 
 
 def process_zip_file(zip_path, source, author):
-    """
-    Extract and process multiple files from a ZIP archive
-    
-    Args:
-        zip_path: Path to the ZIP file
-        source: The source of the data
-        author: The author format preference
-    
-    Returns:
-        Combined JSON data from all files in the ZIP
+    """Estrae e processa piu file bibliografici da un archivio ZIP.
+
+    Parametri:
+        zip_path (str): Percorso dell'archivio ZIP caricato dall'utente.
+        source (str): Selettore sorgente in minuscolo accettato da
+            ``process_single_file``.
+        author (str): Preferenza di formato autore; ``surname`` rimuove ``AF`` e
+            ``fullname`` rimuove ``AU`` nell'output formattato.
+
+    Restituisce:
+        str: Stringa JSON con tutti i record formattati estratti dai file
+        supportati nell'archivio.
+
+    Solleva:
+        ValueError: Se l'archivio non e' valido, contiene troppi file, non puo
+        essere estratto o non contiene dati bibliografici validi.
     """
     all_entries = []
     processed_files = 0
@@ -1405,38 +1928,34 @@ def process_zip_file(zip_path, source, author):
     
     try:
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            # Validate ZIP file size and content
+            # Il limite evita che archivi molto grandi blocchino la sessione web.
             file_list = zip_ref.namelist()
             valid_files = [f for f in file_list if not f.startswith('.') and not f.endswith('/')]
             
             if len(valid_files) > max_files:
                 raise ValueError(f"ZIP archive contains too many files ({len(valid_files)}). Maximum allowed: {max_files}")
             
-            # Create a temporary directory to extract files
             with tempfile.TemporaryDirectory() as temp_dir:
                 zip_ref.extractall(temp_dir)
                 
-                # Get list of extracted files
                 extracted_files = []
                 for root, dirs, files in os.walk(temp_dir):
                     for file in files:
-                        if not file.startswith('.'):  # Skip hidden files
+                        if not file.startswith('.'):
                             extracted_files.append(os.path.join(root, file))
                 
-                # Process each extracted file
                 for file_path in extracted_files:
                     try:
-                        # Determine file type from extension
                         file_ext = os.path.splitext(file_path)[1].lower()
                         if file_ext in ['.txt', '.ciw', '.bib', '.csv', '.xlsx']:
-                            # Process the file using the same logic as single files
                             file_entries = process_single_file(file_path, source, file_ext, author)
                             all_entries.extend(file_entries)
                             processed_files += 1
                         else:
                             print(f"Unsupported file type: {file_ext} for file {os.path.basename(file_path)}")
                     except Exception as e:
-                        # Log error but continue processing other files
+                        # Un file non valido non deve bloccare gli altri file
+                        # estratti dallo stesso archivio.
                         failed_files.append(os.path.basename(file_path))
                         print(f"Error processing file {os.path.basename(file_path)}: {str(e)}")
                         continue
@@ -1453,21 +1972,29 @@ def process_zip_file(zip_path, source, author):
     if not all_entries:
         raise ValueError("No valid bibliographic data found in the ZIP archive. Please ensure it contains supported file formats (.txt, .csv, .bib, .xlsx).")
     
-    # Convert combined entries to JSON
     return json.dumps(all_entries, ensure_ascii=False, indent=4)
 
 
 def process_multiple_files(file_list, source, author):
-    """
-    Process multiple files selected by the user
-    
-    Args:
-        file_list: List of file information dictionaries
-        source: The source of the data
-        author: The author format preference
-    
-    Returns:
-        Combined JSON data from all files
+    """Processa piu file bibliografici selezionati dall'utente.
+
+    Parametri:
+        file_list (list[dict]): Descrittori dei file con almeno le chiavi
+            ``datapath`` e ``name``.
+        source (str): Selettore sorgente in minuscolo accettato da
+            ``process_single_file``.
+        author (str): Preferenza di formato autore; ``surname`` rimuove ``AF`` e
+            ``fullname`` rimuove ``AU`` nell'output formattato.
+
+    Restituisce:
+        str: Stringa JSON con i record formattati combinati da tutti i file.
+
+    Solleva:
+        ValueError: Se non e' possibile estrarre record bibliografici validi.
+
+    Note:
+        Gli errori sui singoli file vengono registrati e saltati, cosi un file
+        non riuscito non impedisce il processamento della selezione restante.
     """
     all_entries = []
     processed_files = 0
@@ -1478,14 +2005,11 @@ def process_multiple_files(file_list, source, author):
             file_path = file_info["datapath"]
             file_name = file_info["name"]
             
-            # Determine if it's a ZIP file or regular file
             if file_name.endswith(".zip"):
-                # Process ZIP file
                 zip_json = process_zip_file(file_path, source, author)
                 zip_entries = json.loads(zip_json)
                 all_entries.extend(zip_entries)
             else:
-                # Process regular file
                 file_entries = process_single_file(file_path, source, file_name, author)
                 all_entries.extend(file_entries)
             
@@ -1508,17 +2032,27 @@ def process_multiple_files(file_list, source, author):
 
 
 def process_single_file(data, source, file_type, author):
-    """
-    Process a single file and return the list of entries
-    
-    Args:
-        data: The path to the input file
-        source: The source of the data  
-        file_type: The file extension/type
-        author: The author format preference
-    
-    Returns:
-        A list of dictionaries containing the formatted data
+    """Processa un file bibliografico in record interni Bibliometrix.
+
+    Parametri:
+        data (str): Percorso del file di input.
+        source (str): Selettore sorgente in minuscolo, come ``wos``, ``scopus``,
+            ``dimensions``, ``lens``, ``pubmed``, or ``cochrane``.
+        file_type (str): Estensione o nome del file usato per scegliere il lettore.
+        author (str): Preferenza di formato autore; ``surname`` rimuove ``AF`` e
+            ``fullname`` rimuove ``AU`` da ogni record di output.
+
+    Restituisce:
+        list[dict]: Record formattati con chiavi colonna compatibili con
+        Bibliometrix.
+
+    Solleva:
+        FileNotFoundError: Propagata quando il percorso di input non puo essere
+        aperto.
+        KeyError: Puo propagarsi quando un campo richiesto specifico della
+        sorgente e' assente.
+        ValueError: Puo propagarsi dai parser o dalle conversioni di campi a
+        formato fisso.
     """
     list_bib_data = []
     
@@ -1583,7 +2117,8 @@ def process_single_file(data, source, file_type, author):
             file_type = ".txt"
             list_bib_data = parse_cochrane_data(data)
 
-    # Extract relevant data and store it in a list of dictionaries
+    # Ogni record viene riportato allo schema Bibliometrix usato dal resto
+    # dell'applicazione, mantenendo le colonne extra non gia standardizzate.
     entries = []
     for entry in list_bib_data:
         entry_data = {
@@ -1623,16 +2158,15 @@ def process_single_file(data, source, file_type, author):
             'VL': format_vl_column(entry, source, file_type),           # Volume
         }
 
-        # Add other columns from 'columns'
         for column in columns:
-            if column not in entry_data:  # Avoid overwriting existing keys
+            if column not in entry_data:
                 entry_data[column] = entry.get(column, None)
         
-        # Remove the column based on the value of the 'author' field
+        # La UI permette di scegliere una sola rappresentazione autoriale.
         if author == "surname":
-            entry_data.pop('AF', None)  # Remove 'AF' if it exists
+            entry_data.pop('AF', None)
         elif author == "fullname":
-            entry_data.pop('AU', None)  # Remove 'AU' if it exists
+            entry_data.pop('AU', None)
 
         entries.append(entry_data)
 
@@ -1640,26 +2174,31 @@ def process_single_file(data, source, file_type, author):
 
 
 def biblio_json(data, source, type, author):
+    """Formatta un input bibliografico in una stringa JSON.
+
+    Parametri:
+        data (str): Percorso del file di input o dell'archivio ZIP.
+        source (str): Selettore sorgente in minuscolo passato alle funzioni di
+            processamento.
+        type (str): Tipo o estensione del file; i file ZIP vengono instradati a
+            ``process_zip_file``.
+        author (str): Preferenza di formato autore usata per mantenere ``AU`` o
+            ``AF`` nell'output.
+
+    Restituisce:
+        str: Stringa JSON contenente record bibliografici formattati.
+
+    Solleva:
+        ValueError: Propagata quando il processamento del file o dello ZIP non
+        riesce a estrarre record validi.
+        FileNotFoundError: Propagata quando il percorso di input non puo essere
+        aperto.
     """
-    Function to format the data from the input file into a JSON format
-    
-    Args:
-        data: The path to the input file
-        source: The source of the data
-        type: The type of the input file
-        author: The author of the data
-    
-    Returns:
-        A JSON string containing the formatted data
-    """
-    # Handle ZIP files - extract and process multiple files
     if type.endswith("zip"):
         return process_zip_file(data, source, author)
     
-    # Handle single files - use the new process_single_file function
     entries = process_single_file(data, source, type, author)
     
-    # Convert the list of dictionaries to JSON
     json_data = json.dumps(entries, ensure_ascii=False, indent=4)
     
     return json_data

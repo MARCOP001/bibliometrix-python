@@ -2,8 +2,28 @@ import pandas as pd
 import plotly.graph_objects as go
 
 
+# Patch rispetto al file fornito:
+# - import espliciti invece di `from www.services import *`;
+# - `_resolve_dataframe` consente di usare la funzione sia in Biblioshiny sia
+#   direttamente sul DataFrame restituito dalla pipeline ETL;
+# - rimossa la dipendenza implicita da `metaTagExtraction(df, "SR")`: la traccia
+#   richiede di verificare che la standardizzazione produca gia' colonne come
+#   `SR`, quindi qui validiamo quel contratto invece di ricostruirlo dentro.
 def _resolve_dataframe(df):
-    """Accept both a Shiny reactive value and a plain pandas DataFrame."""
+    """
+    Risolve l'input dati accettando sia Biblioshiny sia test diretti.
+
+    Args:
+        df: Un `pd.DataFrame` gia' standardizzato oppure un oggetto reattivo
+            Shiny che espone il metodo `.get()`.
+
+    Returns:
+        pd.DataFrame: Copia del DataFrame da usare nei calcoli.
+
+    Raises:
+        ValueError: Se il valore reattivo non contiene dati.
+        TypeError: Se l'input risolto non e' un DataFrame pandas.
+    """
     if isinstance(df, pd.DataFrame):
         data = df
     elif hasattr(df, "get"):
@@ -15,35 +35,57 @@ def _resolve_dataframe(df):
         raise ValueError("get_cited_documents requires a non-empty DataFrame.")
     if not isinstance(data, pd.DataFrame):
         raise TypeError("get_cited_documents expects a pandas DataFrame or an object with .get().")
+    # I calcoli aggiungono colonne temporanee (`TCperYear`, `NormalizedTC`), quindi
+    # la copia evita di sporcare il DataFrame usato dal resto della dashboard.
     return data.copy()
 
 
 def get_cited_documents(df, num_of_cited_docs, cited_docs_measure):
     """
-    Generate a plot and table of the most cited documents.
-    
+    Individua e visualizza i documenti piu' citati globalmente.
+
+    Usa le colonne standardizzate `SR`, `DI`, `TC` e `PY` per costruire una
+    classifica dei documenti per citazioni totali o citazioni per anno. Calcola
+    anche `NormalizedTC`, cioe' le citazioni normalizzate rispetto alla media
+    degli articoli pubblicati nello stesso anno.
+
     Args:
-        df: A DataFrame object containing the data.
-        num_of_cited_docs: The number of top cited documents to display.
-        cited_docs_measure: Ranking measure from the dashboard, either
-            "total_cit" or "total_cit_per_year".
-        
+        df: `pd.DataFrame` standardizzato oppure reactive.Value di Shiny che
+            contiene un DataFrame.
+        num_of_cited_docs (int): Numero massimo di documenti da mostrare nel
+            grafico.
+        cited_docs_measure (str): Metrica di ranking, `total_cit` oppure
+            `total_cit_per_year`.
+
     Returns:
-        A Plotly figure object and a DataFrame of the most cited documents.
+        tuple: `(fig, table)`, dove `fig` e' un `go.FigureWidget` Plotly e
+        `table` contiene la classifica completa con DOI, citazioni totali,
+        citazioni annue e citazioni normalizzate.
+
+    Raises:
+        ValueError: Se il numero richiesto non e' positivo, la metrica non e'
+            valida, mancano colonne richieste o non ci sono documenti validi.
+        TypeError: Se l'input non puo' essere risolto in un DataFrame pandas.
     """
     df = _resolve_dataframe(df)
 
     num_of_cited_docs = int(num_of_cited_docs)
     if num_of_cited_docs <= 0:
         raise ValueError("num_of_cited_docs must be greater than zero.")
+    # La versione fornita trattava qualunque valore diverso da "total_cit" come
+    # citazioni per anno. Qui validiamo il parametro per intercettare errori UI.
     if cited_docs_measure not in {"total_cit", "total_cit_per_year"}:
         raise ValueError("cited_docs_measure must be 'total_cit' or 'total_cit_per_year'.")
 
+    # Queste colonne sono il contratto minimo tra standardizer e funzione:
+    # SR identifica il documento, DI il DOI, TC le citazioni, PY l'anno.
     required_columns = {"SR", "DI", "TC", "PY"}
     missing_columns = required_columns.difference(df.columns)
     if missing_columns:
         raise ValueError(f"Missing required columns: {', '.join(sorted(missing_columns))}.")
 
+    # I file importati possono portare anni/citazioni come stringhe; PubMed puo'
+    # non fornire citazioni reali, quindi i TC non numerici vengono portati a 0.
     df["PY"] = pd.to_numeric(df["PY"], errors="coerce")
     df["TC"] = pd.to_numeric(df["TC"], errors="coerce").fillna(0)
     df = df.dropna(subset=["SR", "PY"]).copy()
@@ -58,8 +100,22 @@ def get_cited_documents(df, num_of_cited_docs, cited_docs_measure):
     
     # Normalize within each publication year; years with zero mean citations stay at 0.
     def normalize_year_citations(citations):
+        """
+        Normalizza le citazioni rispetto alla media dell'anno di pubblicazione.
+
+        Args:
+            citations (pd.Series): Citazioni `TC` dei documenti dello stesso
+                anno di pubblicazione.
+
+        Returns:
+            pd.Series: Valori normalizzati; se la media e' 0 o NaN, restituisce
+            zeri per evitare divisioni non interpretabili.
+        """
         mean_citations = citations.mean()
         if pd.isna(mean_citations) or mean_citations == 0:
+            # Se tutte le citazioni di un anno sono 0, la versione originale
+            # produceva divisione per zero/NaN. Restituire 0 mantiene la metrica
+            # interpretabile per collezioni senza citazioni, ad esempio PubMed.
             return pd.Series(0.0, index=citations.index)
         return (citations / mean_citations).round(2)
 
@@ -117,6 +173,8 @@ def get_cited_documents(df, num_of_cited_docs, cited_docs_measure):
         if pd.isna(max_metric) or max_metric <= 0
         else 18 + 6 * (metric_values / max_metric)
     )
+    # Se tutte le citazioni sono 0, dimensione marker e griglia devono comunque
+    # essere disegnabili: la versione fornita divideva direttamente per max().
 
     # Add scatter markers and text
     fig.add_trace(

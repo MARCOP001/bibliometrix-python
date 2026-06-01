@@ -3,8 +3,29 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 
+# Patch rispetto al file fornito:
+# - sostituito `from www.services import *` con import espliciti, perche' qui
+#   servono solo pandas e plotly;
+# - aggiunto `_resolve_dataframe`, perche' la versione originale usava sempre
+#   `df.get()` e quindi funzionava solo dentro Shiny, non con il DataFrame gia'
+#   restituito dalla pipeline ETL;
+# - aggiunti controlli e conversioni su `PY` e `TC`, perche' file standardizzati
+#   da sorgenti diverse possono avere anni/citazioni come stringhe o valori NaN.
 def _resolve_dataframe(df):
-    """Accept both a Shiny reactive value and a plain pandas DataFrame."""
+    """
+    Risolve l'input dati accettando sia Biblioshiny sia test diretti.
+
+    Args:
+        df: Un `pd.DataFrame` gia' standardizzato oppure un oggetto reattivo
+            Shiny che espone il metodo `.get()`.
+
+    Returns:
+        pd.DataFrame: Copia del DataFrame da usare nei calcoli.
+
+    Raises:
+        ValueError: Se il valore reattivo non contiene dati.
+        TypeError: Se l'input risolto non e' un DataFrame pandas.
+    """
     if isinstance(df, pd.DataFrame):
         data = df
     elif hasattr(df, "get"):
@@ -16,18 +37,31 @@ def _resolve_dataframe(df):
         raise ValueError("get_average_citations requires a non-empty DataFrame.")
     if not isinstance(data, pd.DataFrame):
         raise TypeError("get_average_citations expects a pandas DataFrame or an object with .get().")
+    # Lavoriamo su una copia per non cambiare i tipi del DataFrame condiviso
+    # dalla dashboard mentre calcoliamo la metrica.
     return data.copy()
 
 
 def get_average_citations(df):
     """
-    Generate a plot of average citations per year.
-    
+    Calcola le citazioni medie annue dei documenti.
+
+    La funzione usa `PY` come anno di pubblicazione e `TC` come totale delle
+    citazioni globali. Il risultato permette di osservare se gli articoli di un
+    certo anno ricevono, in media, piu' o meno citazioni per anno citabile.
+
     Args:
-        df: A DataFrame object containing the data.
-        
+        df: `pd.DataFrame` standardizzato oppure reactive.Value di Shiny che
+            contiene un DataFrame.
+
     Returns:
-        A Plotly figure object representing the average citations per year.
+        tuple: `(fig, table)`, dove `fig` e' un `go.FigureWidget` Plotly e
+        `table` contiene `Year`, `MeanTCperArt`, `N`, `MeanTCperYear` e
+        `CitableYears`.
+
+    Raises:
+        ValueError: Se mancano `PY`/`TC` o se `PY` non contiene anni validi.
+        TypeError: Se l'input non puo' essere risolto in un DataFrame pandas.
     """
     data = _resolve_dataframe(df)
 
@@ -36,6 +70,9 @@ def get_average_citations(df):
     if missing_columns:
         raise ValueError(f"Missing required columns: {', '.join(sorted(missing_columns))}.")
 
+    # `PY` e `TC` sono colonne standard della pipeline, ma non sempre arrivano
+    # gia' numeriche. Le citazioni mancanti vengono trattate come 0: e' il caso
+    # tipico di sorgenti come PubMed, che spesso non esportano citazioni.
     data["PY"] = pd.to_numeric(data["PY"], errors="coerce")
     data["TC"] = pd.to_numeric(data["TC"], errors="coerce").fillna(0)
     data = data.dropna(subset=["PY"]).copy()

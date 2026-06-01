@@ -10,6 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from scripts.etl_analysis_common import (
     extract_standardized_dataframe,
+    write_plot_html,
     write_standardization_report,
     write_standardized_dataframe,
 )
@@ -95,7 +96,7 @@ def main():
     contract_path = output_dir / "standardization_report.txt"
 
     table.to_csv(csv_path, index=False)
-    fig.write_html(html_path, include_plotlyjs=True, full_html=True)
+    write_plot_html(fig, html_path)
     write_summary(table, summary_path)
     write_standardized_dataframe(data, standardized_path)
     write_standardization_report(data, contract_path)

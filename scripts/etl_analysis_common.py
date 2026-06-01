@@ -47,6 +47,12 @@ def write_standardized_dataframe(df, output_file):
     dataframe_for_csv(df).to_csv(output_file, index=False)
 
 
+def write_plot_html(fig, output_file):
+    output_file = Path(output_file)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    fig.write_html(output_file, include_plotlyjs="directory", full_html=True)
+
+
 def write_standardization_report(df, output_file):
     contracts = column_type_contracts()
     missing_columns = [column for column in contracts if column not in df.columns]

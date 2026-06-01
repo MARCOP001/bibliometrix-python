@@ -813,6 +813,46 @@ autoriale. Anche qui la standardizzazione di `AU` e' centrale, ma il risultato e
 diverso da `get_relevant_authors`: invece della classifica degli autori, produce
 la distribuzione osservata e teorica della produttivita' autoriale.
 
+## Salvataggio dei plot HTML
+
+### Cosa non andava nella versione precedente
+
+Gli script salvavano i grafici con:
+
+```python
+fig.write_html(html_path, include_plotlyjs=True, full_html=True)
+```
+
+Questa opzione incorpora tutta la libreria JavaScript di Plotly dentro ogni file
+HTML. In alcuni casi Plotly veniva scritto in una singola riga molto lunga: il
+file funzionava nel browser, ma aprirlo in VS Code poteva causare lag.
+
+### Cosa e' stato modificato
+
+E' stata aggiunta la funzione comune:
+
+```python
+write_plot_html(fig, output_file)
+```
+
+in `scripts/etl_analysis_common.py`.
+
+Ora tutti gli script usano:
+
+```python
+fig.write_html(output_file, include_plotlyjs="directory", full_html=True)
+```
+
+### Perche'
+
+Con `include_plotlyjs="directory"` il file HTML contiene solo il grafico e un
+riferimento a `plotly.min.js`, salvato nella stessa cartella. In questo modo:
+
+- gli HTML passano da circa 4.4 MB a circa 9-19 KB;
+- non ci sono piu' righe JavaScript enormi dentro gli HTML;
+- i plot restano apribili offline, a patto di lasciare `plotly.min.js` accanto
+  al rispettivo file HTML.
+
 ## `analysis_results/`
 
 ### Cosa e' stato generato

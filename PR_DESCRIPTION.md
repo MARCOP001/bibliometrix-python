@@ -251,6 +251,11 @@ Il risultato e' un DataFrame standardizzato, utilizzabile dalla dashboard Biblio
 
 
 
+## COME TESTARLO:
+Digitare da terminale: python -m shiny run app.py 
+
+Per una migliore visualizzazione, consigliamo di aprire l'applicazione mediante l'uso di un browser, da cui è possibile testare il corretto svolgimento della pipeline e delle funzioni analitiche.
+
 
 
 ## LOG DI ESECUZIONE STEP-BY-STEP

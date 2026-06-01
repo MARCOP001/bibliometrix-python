@@ -2,6 +2,13 @@ import pandas as pd
 import plotly.graph_objects as go
 
 
+# Patch rispetto al file fornito:
+# - import espliciti invece di `from www.services import *`;
+# - aggiunto `_resolve_dataframe`, per usare la funzione sia con reactive.Value
+#   di Biblioshiny sia con DataFrame pandas prodotti direttamente dalla ETL;
+# - aggiunta normalizzazione dei nomi delle metriche, perche' la dashboard passa
+#   valori tecnici (`n_docs`, `percentage`, `freq_measure`) mentre la tabella usa
+#   etichette leggibili.
 FREQUENCY_LABELS = {
     "n_docs": "N. of Documents",
     "percentage": "Percentage",
@@ -10,7 +17,20 @@ FREQUENCY_LABELS = {
 
 
 def _resolve_dataframe(df):
-    """Accept both a Shiny reactive value and a plain pandas DataFrame."""
+    """
+    Risolve l'input dati accettando sia Biblioshiny sia test diretti.
+
+    Args:
+        df: Un `pd.DataFrame` gia' standardizzato oppure un oggetto reattivo
+            Shiny che espone il metodo `.get()`.
+
+    Returns:
+        pd.DataFrame: Copia del DataFrame da usare nei calcoli.
+
+    Raises:
+        ValueError: Se il valore reattivo non contiene dati.
+        TypeError: Se l'input risolto non e' un DataFrame pandas.
+    """
     if isinstance(df, pd.DataFrame):
         data = df
     elif hasattr(df, "get"):
@@ -22,24 +42,50 @@ def _resolve_dataframe(df):
         raise ValueError("get_relevant_authors requires a non-empty DataFrame.")
     if not isinstance(data, pd.DataFrame):
         raise TypeError("get_relevant_authors expects a pandas DataFrame or an object with .get().")
+    # Le trasformazioni successive toccano `AU`; la copia evita side effect sul
+    # DataFrame globale della dashboard.
     return data.copy()
 
 
 def _normalize_frequency(frequency):
+    """
+    Converte il valore tecnico della dashboard nel nome colonna leggibile.
+
+    Args:
+        frequency (str): Valore selezionato nella UI o nome gia' leggibile.
+
+    Returns:
+        str: Etichetta da usare come colonna e titolo dell'asse.
+    """
+    # La versione fornita confrontava direttamente stringhe come "percentage" e
+    # usava poi quella stessa stringa come nome colonna. Questo rendeva output e
+    # grafico meno coerenti con la dashboard/table.
     return FREQUENCY_LABELS.get(frequency, frequency)
 
 
 def get_relevant_authors(df, num_of_authors, frequency="N. of Documents"):
     """
-    Generate a plot and table of the most relevant authors with frequency options.
-    
+    Individua e visualizza gli autori piu' rilevanti della collezione.
+
+    Usa la colonna standardizzata `AU`, attesa come lista di autori per
+    documento. La metrica puo' essere numero di documenti, percentuale o
+    frequenza frazionata.
+
     Args:
-        df: A DataFrame object containing the data.
-        num_of_authors: The number of top authors to display.
-        frequency: Type of frequency calculation. Options: "N. of Documents", "Percentage", "Fractionalized".
-        
+        df: `pd.DataFrame` standardizzato oppure reactive.Value di Shiny che
+            contiene un DataFrame.
+        num_of_authors (int): Numero massimo di autori da mostrare nel grafico.
+        frequency (str): Metrica da usare. Accetta valori UI come `n_docs`,
+            `percentage`, `freq_measure` oppure etichette leggibili.
+
     Returns:
-        A Plotly figure object and a DataFrame of the most relevant authors.
+        tuple: `(fig, table_relevant_authors)`, dove `fig` e' un
+        `go.FigureWidget` Plotly e la tabella contiene gli autori ordinati per
+        la metrica selezionata.
+
+    Raises:
+        ValueError: Se manca `AU` o se non contiene liste di autori valide.
+        TypeError: Se l'input non puo' essere risolto in un DataFrame pandas.
     """
     data = _resolve_dataframe(df)
     frequency = _normalize_frequency(frequency)
@@ -47,7 +93,9 @@ def get_relevant_authors(df, num_of_authors, frequency="N. of Documents"):
     if "AU" not in data.columns:
         raise ValueError("Missing required column: AU.")
 
-    # Drop rows with missing values
+    # `AU` deve essere una lista di autori prodotta dallo standardizer. I valori
+    # non-lista vengono ignorati per evitare di iterare stringhe carattere per
+    # carattere o di rompere il calcolo fractional.
     data = data.dropna(subset=["AU"]).copy()
 
     # Ensure all values in the "AU" column are lists
@@ -66,6 +114,9 @@ def get_relevant_authors(df, num_of_authors, frequency="N. of Documents"):
     elif frequency == "Fractionalized Frequency":
         # Calculate fractional counts
         fractional_counts = data["AU"].apply(lambda authors: 1 / len(authors) if authors else 0)
+        # Dopo i filtri l'indice del DataFrame puo' non essere 0..n. La versione
+        # fornita usava `fractional_counts[i]` con enumerate e poteva associare
+        # pesi errati o generare KeyError. `zip` mantiene allineate righe e pesi.
         fractional_authors = [
             (author, weight)
             for authors, weight in zip(data["AU"], fractional_counts)

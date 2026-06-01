@@ -3,8 +3,27 @@ import pandas as pd
 import plotly.graph_objects as go
 
 
+# Patch rispetto al file fornito:
+# - import espliciti invece di `from www.services import *`;
+# - `_resolve_dataframe` rende la funzione usabile sia dalla dashboard Shiny sia
+#   da un DataFrame pandas gia' prodotto dalla ETL;
+# - sono stati aggiunti controlli su `SO`, perche' la legge di Bradford si basa
+#   sulla frequenza delle fonti e fallisce se la standardizzazione non la produce.
 def _resolve_dataframe(df):
-    """Accept both a Shiny reactive value and a plain pandas DataFrame."""
+    """
+    Risolve l'input dati accettando sia Biblioshiny sia test diretti.
+
+    Args:
+        df: Un `pd.DataFrame` gia' standardizzato oppure un oggetto reattivo
+            Shiny che espone il metodo `.get()`.
+
+    Returns:
+        pd.DataFrame: Copia del DataFrame da usare nei calcoli.
+
+    Raises:
+        ValueError: Se il valore reattivo non contiene dati.
+        TypeError: Se l'input risolto non e' un DataFrame pandas.
+    """
     if isinstance(df, pd.DataFrame):
         data = df
     elif hasattr(df, "get"):
@@ -16,18 +35,29 @@ def _resolve_dataframe(df):
         raise ValueError("get_bradford_law requires a non-empty DataFrame.")
     if not isinstance(data, pd.DataFrame):
         raise TypeError("get_bradford_law expects a pandas DataFrame or an object with .get().")
+    # Usiamo una copia per non filtrare/modificare il DataFrame condiviso in app.
     return data.copy()
 
 
 def get_bradford_law(df):
     """
-    Generate a plot and table based on Bradford's Law.
-    
+    Calcola e visualizza la distribuzione delle fonti secondo Bradford.
+
+    Usa la colonna standardizzata `SO` per ordinare le fonti per frequenza,
+    calcolare la frequenza cumulata e assegnare le zone di Bradford. Il grafico
+    evidenzia il nucleo di fonti piu' produttive della collezione.
+
     Args:
-        df: A DataFrame object containing the data.
-        
+        df: `pd.DataFrame` standardizzato oppure reactive.Value di Shiny che
+            contiene un DataFrame.
+
     Returns:
-        A Plotly figure object and a DataFrame of the Bradford's Law zones.
+        tuple: `(fig, df_bradford)`, dove `fig` e' un grafico Plotly e
+        `df_bradford` contiene `SO`, `Rank`, `Freq`, `cumFreq` e `Zone`.
+
+    Raises:
+        ValueError: Se manca `SO` o se non contiene fonti valide.
+        TypeError: Se l'input non puo' essere risolto in un DataFrame pandas.
     """
     # Sort data by frequency of occurrence (equivalent to R's sort(table(M$SO), decreasing = TRUE))
     data = _resolve_dataframe(df)
@@ -35,6 +65,8 @@ def get_bradford_law(df):
     if "SO" not in data.columns:
         raise ValueError("Missing required column: SO.")
 
+    # La versione iniziale assumeva fonti sempre presenti. Con file reali/ETL e'
+    # meglio rimuovere NaN e stringhe vuote prima di calcolare le zone Bradford.
     data = data.dropna(subset=["SO"]).copy()
     data = data[data["SO"].astype(str).str.strip() != ""]
     if data.empty:
@@ -93,6 +125,8 @@ def get_bradford_law(df):
     # Add the "Core Sources" area with the rectangle
     fig.add_shape(
         type="rect",
+        # Nelle collezioni piccole `a` puo' indicare oltre l'ultimo indice.
+        # Il `min(...)` evita IndexError mantenendo il core sull'ultima fonte valida.
         x0=0,
         x1=np.log(df_bradford["Rank"].iloc[min(a - 1, len(df_bradford) - 1)]),
         y0=0,
@@ -105,6 +139,8 @@ def get_bradford_law(df):
 
     # Add the "Core Sources" annotation with smaller font
     fig.add_annotation(
+        # Stessa protezione dell'area: la versione fornita usava Rank[a] e
+        # poteva andare fuori indice quando il dataset aveva poche fonti.
         x=np.log(df_bradford["Rank"].iloc[min(a - 1, len(df_bradford) - 1)]) / 2,
         y=df_bradford["Freq"].max() * 0.85,
         text="<b>Core<br>Sources</b>",

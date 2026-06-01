@@ -3,8 +3,29 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 
+# Patch rispetto al file fornito:
+# - gli import sono espliciti invece di `from www.services import *`, perche' la
+#   funzione usa solo pandas/plotly e non deve dipendere da oggetti globali;
+# - e' stato aggiunto `_resolve_dataframe` per poter usare la stessa funzione sia
+#   in Biblioshiny, dove arriva un reactive.Value con `.get()`, sia nei controlli
+#   diretti sulla pipeline ETL, dove arriva un normale pd.DataFrame;
+# - il calcolo della tabella annuale e' stato isolato in un helper per validare
+#   `PY` prima del plot: la versione originale assumeva anni gia' numerici.
 def _resolve_dataframe(df):
-    """Accept both a Shiny reactive value and a plain pandas DataFrame."""
+    """
+    Risolve l'input dati accettando sia Biblioshiny sia test diretti.
+
+    Args:
+        df: Un `pd.DataFrame` gia' standardizzato oppure un oggetto reattivo
+            Shiny che espone il metodo `.get()`.
+
+    Returns:
+        pd.DataFrame: Copia del DataFrame da usare nei calcoli.
+
+    Raises:
+        ValueError: Se il valore reattivo non contiene dati.
+        TypeError: Se l'input risolto non e' un DataFrame pandas.
+    """
     if isinstance(df, pd.DataFrame):
         data = df
     elif hasattr(df, "get"):
@@ -16,13 +37,31 @@ def _resolve_dataframe(df):
         raise ValueError("get_annual_production requires a non-empty DataFrame.")
     if not isinstance(data, pd.DataFrame):
         raise TypeError("get_annual_production expects a pandas DataFrame or an object with .get().")
+    # La copia evita che conversioni/filtri interni modifichino il DataFrame
+    # condiviso dalla dashboard.
     return data.copy()
 
 
 def _annual_publications_table(data):
+    """
+    Costruisce la tabella della produzione scientifica per anno.
+
+    Args:
+        data (pd.DataFrame): DataFrame standardizzato contenente la colonna
+            `PY` con l'anno di pubblicazione.
+
+    Returns:
+        pd.DataFrame: Tabella con colonne `Year` e `Freq`, includendo anche
+        gli anni senza pubblicazioni con frequenza pari a 0.
+
+    Raises:
+        ValueError: Se `PY` manca o non contiene anni validi.
+    """
     if "PY" not in data.columns:
         raise ValueError("Missing required column: PY.")
 
+    # Dopo la standardizzazione `PY` puo' arrivare come stringa; senza questa
+    # conversione `range(min_year, max_year + 1)` puo' fallire o ordinare male.
     years = pd.to_numeric(data["PY"], errors="coerce").dropna().astype(int)
     if years.empty:
         raise ValueError("Column PY does not contain valid publication years.")
@@ -34,6 +73,8 @@ def _annual_publications_table(data):
     max_year = int(publications_per_year["Year"].max())
     all_years = pd.DataFrame({"Year": range(min_year, max_year + 1)})
 
+    # Come in bibliometrix, gli anni senza pubblicazioni vengono mantenuti a 0:
+    # cosi' il grafico mostra anche i buchi temporali della collezione.
     publications_per_year = all_years.merge(
         publications_per_year, on="Year", how="left"
     ).fillna({"Freq": 0})
@@ -43,13 +84,25 @@ def _annual_publications_table(data):
 
 def get_annual_production(df):
     """
-    Generate a plot of annual scientific production.
-    
+    Calcola e visualizza la produzione scientifica annuale.
+
+    Usa la colonna standardizzata `PY` per contare quanti documenti sono stati
+    pubblicati in ciascun anno. E' pensata per funzionare sia dalla dashboard
+    Biblioshiny sia passando direttamente il DataFrame prodotto dalla pipeline
+    ETL.
+
     Args:
-        df: A pandas DataFrame or a Shiny reactive value containing the data.
-        
+        df: `pd.DataFrame` standardizzato oppure reactive.Value di Shiny che
+            contiene un DataFrame.
+
     Returns:
-        A Plotly figure object and a DataFrame with annual publication counts.
+        tuple: `(fig, publications_per_year)`, dove `fig` e' un
+        `go.FigureWidget` Plotly e `publications_per_year` e' una tabella con
+        colonne `Year` e `Freq`.
+
+    Raises:
+        ValueError: Se il DataFrame e' vuoto o non contiene anni validi in `PY`.
+        TypeError: Se l'input non puo' essere risolto in un DataFrame pandas.
     """
     data = _resolve_dataframe(df)
     publications_per_year = _annual_publications_table(data)

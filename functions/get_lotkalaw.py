@@ -3,8 +3,27 @@ import pandas as pd
 import plotly.graph_objects as go
 
 
+# Patch rispetto al file fornito:
+# - import espliciti invece di `from www.services import *`;
+# - `_resolve_dataframe` consente di usare la funzione sia in Biblioshiny sia
+#   nei controlli diretti sul DataFrame standardizzato dalla pipeline ETL;
+# - aggiunti controlli su `AU`, perche' Lotka richiede una lista di autori per
+#   documento e la funzione originale assumeva che il formato fosse sempre valido.
 def _resolve_dataframe(df):
-    """Accept both a Shiny reactive value and a plain pandas DataFrame."""
+    """
+    Risolve l'input dati accettando sia Biblioshiny sia test diretti.
+
+    Args:
+        df: Un `pd.DataFrame` gia' standardizzato oppure un oggetto reattivo
+            Shiny che espone il metodo `.get()`.
+
+    Returns:
+        pd.DataFrame: Copia del DataFrame da usare nei calcoli.
+
+    Raises:
+        ValueError: Se il valore reattivo non contiene dati.
+        TypeError: Se l'input risolto non e' un DataFrame pandas.
+    """
     if isinstance(df, pd.DataFrame):
         data = df
     elif hasattr(df, "get"):
@@ -16,19 +35,32 @@ def _resolve_dataframe(df):
         raise ValueError("get_lotka_law requires a non-empty DataFrame.")
     if not isinstance(data, pd.DataFrame):
         raise TypeError("get_lotka_law expects a pandas DataFrame or an object with .get().")
+    # Lavoriamo su una copia per non normalizzare/filtrare `AU` nel DataFrame
+    # condiviso dalla dashboard.
     return data.copy()
 
 
 def get_lotka_law(df):
     """
-    Calculates Lotka's Law for a given dataset and generates a line plot comparing observed and theoretical author productivity distributions.
+    Calcola la legge di Lotka sulla produttivita' degli autori.
+
+    La funzione usa la colonna standardizzata `AU`, attesa come lista di autori
+    per documento. Conta quanti articoli ha scritto ogni autore, aggrega gli
+    autori per numero di articoli e confronta la distribuzione osservata con una
+    distribuzione teorica di Lotka.
 
     Args:
-        df (pd.DataFrame): Dataset containing at least the "AU" (authors) column as lists of author names.
+        df: `pd.DataFrame` standardizzato oppure reactive.Value di Shiny che
+            contiene un DataFrame.
 
     Returns:
-        fig: Plotly figure showing the observed and theoretical Lotka's Law distributions.
-        author_prod (pd.DataFrame): Table summarizing the number of articles per author and their frequencies.
+        tuple: `(fig, author_prod)`, dove `fig` e' un `go.FigureWidget` Plotly e
+        `author_prod` contiene `N.Articles`, `N.Authors`, `Freq` e
+        `Theoretical`.
+
+    Raises:
+        ValueError: Se manca `AU` o se non contiene autori validi.
+        TypeError: Se l'input non puo' essere risolto in un DataFrame pandas.
     """
     
     # Calculate Lotka's Law
@@ -37,6 +69,10 @@ def get_lotka_law(df):
     if "AU" not in data.columns:
         raise ValueError("Missing required column: AU.")
 
+    # La versione fornita faceva direttamente:
+    #   for sublist in data["AU"] for author in sublist
+    # Questo funziona solo se ogni cella e' gia' una lista. Dopo ETL reali e'
+    # possibile trovare NaN/stringhe: vengono filtrati per evitare risultati falsi.
     data = data.dropna(subset=["AU"]).copy()
     data["AU"] = data["AU"].apply(lambda x: x if isinstance(x, list) else [])
     data = data[data["AU"].apply(len) > 0].copy()
@@ -59,6 +95,9 @@ def get_lotka_law(df):
         author_prod['Theoretical'] = 10**(lotka_law[1] - 2 * np.log10(author_prod['N.Articles']))
         author_prod['Theoretical'] = author_prod['Theoretical'] / author_prod['Theoretical'].sum()
     else:
+        # `np.polyfit` richiede almeno due punti. Con dataset piccoli o molto
+        # uniformi esiste un solo livello di produttivita', quindi usiamo 1.0
+        # invece di far fallire il plot.
         author_prod['Theoretical'] = 1.0
     
     # Create the plot with improved hover
